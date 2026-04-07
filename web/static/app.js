@@ -156,7 +156,12 @@ async function loadDashboard(forceRun = false) {
   $('loading-state').style.display = 'flex';
   $('error-state').style.display = 'none';
   $('dashboard-content').style.opacity = '0.3';
-  $('run-btn').disabled = true;
+  const btn = $('run-btn');
+  btn.disabled = true;
+  btn.innerHTML = `
+    <svg style="animation: spin 0.6s linear infinite;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+    Syncing...
+  `;
   setStatus('running', 'Syncing…');
  
   const newId = $('new-event-id').value.trim();
@@ -182,7 +187,12 @@ async function loadDashboard(forceRun = false) {
     setStatus('error', 'Error');
   } finally {
     $('loading-state').style.display = 'none';
-    $('run-btn').disabled = false;
+    const btn = $('run-btn');
+    btn.disabled = false;
+    btn.innerHTML = `
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Sync Ledger
+    `;
   }
 }
 

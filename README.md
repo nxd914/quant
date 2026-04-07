@@ -1,41 +1,84 @@
-# Vequil — The AI Agent Ledger
+# 🔍 Vequil — AI Agent Ledger
 
-**Free ledger for everything your AI agents do. Always.**
+<p align="center">
+  <strong>See everything your agents do. Free, forever.</strong>
+</p>
 
-Catch rogue agents, audit logic loops, and verify every tool call. Vequil is the unified source of truth for the agentic era, designed for operators who need absolute visibility into their fleets.
+<p align="center">
+  <a href="https://github.com/nxd914/clear-line-agent"><img src="https://img.shields.io/github/stars/nxd914/clear-line-agent?style=for-the-badge" alt="Stars"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
+  <a href="https://moltbook.com"><img src="https://img.shields.io/badge/Moltbook-Community-orange?style=for-the-badge" alt="Moltbook"></a>
+</p>
 
-## 🚀 Why Vequil?
+Vequil is a free, open-source ledger for AI agent activity. Connect any agent runtime and every action, tool call, and anomaly is automatically logged and surfaced in a real-time dashboard.
 
-- **Surprising Truths**: Discover what your agents are actually doing when you're not looking.
-- **Unified Audit Trail**: Every syscall, reasoning step, and tool call captured in one place.
-- **Viral Growth Support**: Share your "Agent Quality Score" with a public-facing Weekly Report Card.
-- **Built for OpenClaw**: Native support for the OpenClaw and Moltbook ecosystems.
+> "847 agent actions last week. Operator approved 12." — that gap is what Vequil closes.
 
-## 🛠 Integration Guides
+[Dashboard](web/static/dashboard.html) · [OpenClaw Plugin](misc/openclaw/README_OPENCLAW.md) · [Pricing](#pricing)
 
-- **OpenClaw**: [Logging Plugin Setup Guide (README_OPENCLAW.md)](file:///Users/noahdonovan/vequil-alpha/misc/openclaw/README_OPENCLAW.md) — Get logged in under 60 seconds.
-- **SDK**: Coming soon. 
+## Quick Start
 
-## 🏗 Setup
+Runtime: **Python 3.10+**
 
-1. **Clone the repo**:
-   ```bash
-   git clone https://github.com/nxd914/clear-line-agent.git
-   ```
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Start the server**:
-   ```bash
-   PYTHONPATH=src python -m vequil.server
-   ```
-4. **Access the console**:
-   Open `web/static/dashboard.html` in your browser.
+```bash
+git clone https://github.com/nxd914/clear-line-agent.git
+cd clear-line-agent
 
-## 📈 Pricing
-- **Personal**: Free (Forever)
-- **Pro**: $9/mo (Lifetime history, priority support)
+pip install -r requirements.txt
 
----
-© 2026 Vequil. Built for the OpenClaw community.
+PYTHONPATH=src python -m vequil.server
+```
+
+Then open `web/static/dashboard.html` in your browser.
+
+## OpenClaw Integration
+
+Connect your OpenClaw agent to Vequil in under 60 seconds.
+
+```bash
+# 1. Copy the plugin into your OpenClaw workspace
+cp misc/openclaw/vequil_plugin.py ~/.openclaw/workspace/skills/vequil/
+
+# 2. Set your Vequil endpoint
+export VEQUIL_ENDPOINT=http://localhost:8000/api/log
+
+# 3. That's it — every tool_result_persist event now logs to Vequil
+```
+
+Full guide: [README_OPENCLAW.md](misc/openclaw/README_OPENCLAW.md)
+
+## What Gets Logged
+
+- Every tool call and result
+- Session metadata (agent ID, model, timestamp)
+- Anomalies: runaway loops, unauthorized sub-agent spend, orphaned tasks, duplicate execution
+- Agent Quality Score — shareable weekly report card
+
+## Integrations
+
+| Runtime | Status |
+|---|---|
+| OpenClaw | ✅ Live |
+| Anthropic API / Claude | 🔜 Coming soon |
+| OpenAI API | 🔜 Coming soon |
+| LangChain | 🔜 Coming soon |
+| Moltbook | 🔜 Coming soon |
+
+## Pricing
+
+**Personal — Free forever**
+- Unlimited agents
+- Full activity ledger
+- Anomaly detection
+- 30-day history
+
+**Pro — $9/month**
+- Unlimited history
+- Advanced anomaly alerts
+- Team sharing
+- Priority support
+
+## Community
+
+Built for the [OpenClaw](https://github.com/openclaw/openclaw) and [Moltbook](https://moltbook.com) communities.
+Discuss in [m/openclaw-explorers](https://moltbook.com/m/openclaw-explorers).
