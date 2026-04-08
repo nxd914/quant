@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vequil Agent Report Card — Verified AI Ledger</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --black: #000000;
+            --white: #ffffff;
+            --blue: #0066ff;
+            --accent: #00d2ff;
+            --gray-100: #f1f5f9;
+            --gray-400: #94a3b8;
+            --shadow: 0 20px 50px rgba(0,0,0,0.15);
+            --font-display: 'Syne', sans-serif;
+            --font-body: 'Inter', sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #fafafa;
+            font-family: var(--font-body);
+            display: flex; justify-content: center; align-items: center; min-height: 100vh;
+            color: var(--black);
+        }
+
+        .report-page-container {
+            width: 100%; max-width: 500px; padding: 20px;
+        }
+
+        .inner-card {
+            background: var(--white);
+            border-radius: 20px; padding: 40px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(0,0,0,0.05);
+            position: relative; overflow: hidden;
+        }
+
+        .logo-top {
+            display: flex; justify-content: center; margin-bottom: 30px;
+        }
+        .logo-top img { height: 44px; }
+
+        .ic-header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--gray-100); padding-bottom: 15px; margin-bottom: 25px;
+        }
+
+        .ic-title { font-family: var(--font-display); font-weight: 800; font-size: 20px; color: var(--blue); }
+        .ic-badge { font-family: var(--font-display); background: var(--black); color: var(--white); padding: 4px 10px; border-radius: 6px; font-size: 12px; }
+
+        .ics-item { margin-bottom: 20px; }
+        .ics-item .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gray-400); font-weight: 600; margin-bottom: 4px; display: block; }
+        .ics-item .val { font-size: 24px; font-weight: 600; }
+        .ics-item .sub { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+
+        .ic-stamp {
+            margin-top: 30px; border-top: 1px solid var(--gray-100); padding-top: 20px;
+            text-align: center; font-family: var(--font-display); font-weight: 800;
+            font-size: 14px; color: var(--gray-400); opacity: 0.5;
+        }
+
+        .cta-bottom {
+            margin-top: 30px; text-align: center;
+        }
+        .cta-btn {
+            background: var(--black); color: var(--white); text-decoration: none;
+            padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;
+            display: inline-block; transition: transform 0.2s;
+        }
+        .cta-btn:hover { transform: translateY(-2px); }
+
+        #loading { text-align: center; color: var(--gray-400); }
+    </style>
+</head>
+<body>
+
+    <div class="report-page-container">
+        <div id="loading">Syncing with ledger...</div>
+        
+        <div id="card-container" style="display:none;">
+            <div class="logo-top">
+                <img src="/logo.png" alt="Vequil VQ Logo">
+            </div>
+
+            <div class="inner-card">
+                <div class="ic-header">
+                    <div class="ic-title">Agent Quality Score</div>
+                    <div class="ic-badge">WEEK 14 · A+</div>
+                </div>
+                
+                <div class="ic-stats">
+                    <div class="ics-item">
+                        <span class="label">Weekly Activity</span>
+                        <div class="val" id="stat-activity">0 actions</div>
+                        <div class="sub">Verified by Vequil Ledger</div>
+                    </div>
+                    <div class="ics-item">
+                        <span class="label">Anomaly Profile</span>
+                        <div class="val" id="stat-anomaly">None</div>
+                        <div class="sub">Identified and audited</div>
+                    </div>
+                    <div class="ics-item">
+                        <span class="label">Most Active Agent</span>
+                        <div class="val" id="stat-agent">OpenClaw</div>
+                        <div class="sub">Highest resolution rate</div>
+                    </div>
+                </div>
+
+                <div class="ic-stamp">VERIFIED BY VEQUIL</div>
+            </div>
+
+            <div class="cta-bottom">
+                <a href="/" class="cta-btn">Create Your Own Ledger</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const eventId = window.location.pathname.split('/').pop();
+        
+        async function loadReport() {
+            try {
+                const res = await fetch(`/api/public/report?event_id=${eventId}`);
+                if (!res.ok) throw new Error('Report not found');
+                const data = await res.json();
+                
+                document.getElementById('stat-activity').textContent = 
+                    `${data.metrics.total_transactions.toLocaleString()} actions`;
+                document.getElementById('stat-anomaly').textContent = data.top_anomaly;
+                document.getElementById('stat-agent').textContent = 
+                    data.processor_summary.length > 0 ? data.processor_summary[0].processor : 'Vequil Instance';
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('card-container').style.display = 'block';
+            } catch (err) {
+                document.getElementById('loading').textContent = 'Error: Public report unavailable.';
+                console.error(err);
+            }
+        }
+
+        loadReport();
+    </script>
+</body>
+</html>

@@ -1,18 +1,22 @@
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vequil — The surprising truth about your AI agents</title>
-    <meta name="description" content="Discover what your agents are actually doing when you're not looking. Every syscall, every loop, every cent.">
-    
+    <meta name="description"
+        content="Discover what your agents are actually doing when you're not looking. Every syscall, every loop, every cent.">
+
     <!-- Branding -->
     <link rel="icon" href="./logo.png" type="image/png">
     <link rel="apple-touch-icon" href="./logo.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+
     <style>
         :root {
             --white: #ffffff;
@@ -30,8 +34,18 @@
             --font-body: 'Inter', sans-serif;
         }
 
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html { scroll-behavior: smooth; }
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
         body {
             font-family: var(--font-body);
             background: var(--white);
@@ -43,7 +57,9 @@
         /* ── NAV ── */
         nav {
             position: fixed;
-            top: 0; left: 0; right: 0;
+            top: 0;
+            left: 0;
+            right: 0;
             z-index: 1000;
             height: var(--nav-h);
             background: rgba(255, 255, 255, 0.8);
@@ -65,24 +81,49 @@
 
         .nav-logo {
             display: flex;
-            align-items: center; gap: 10px;
+            align-items: center;
+            gap: 10px;
             text-decoration: none;
             font-family: var(--font-display);
-            font-weight: 800; font-size: 18px;
+            font-weight: 800;
+            font-size: 18px;
             color: var(--black);
         }
 
-        .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
-        .nav-links a { text-decoration: none; color: var(--gray-600); font-size: 14px; transition: color 0.2s; }
-        .nav-links a:hover { color: var(--black); }
-        .nav-cta { background: var(--black); color: var(--white) !important; padding: 8px 16px; border-radius: 6px; font-weight: 500; font-size: 14px; }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--gray-600);
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--black);
+        }
+
+        .nav-cta {
+            background: var(--black);
+            color: var(--white) !important;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 14px;
+        }
 
         /* ── HERO ── */
         #hero {
             padding-top: 140px;
             padding-bottom: 100px;
             text-align: center;
-            max-width: 900px; margin: 0 auto;
+            max-width: 900px;
+            margin: 0 auto;
             padding-inline: 24px;
         }
 
@@ -96,109 +137,306 @@
         }
 
         .hero-sub {
-            font-size: 18px; color: var(--gray-600);
-            max-width: 620px; margin: 0 auto 40px;
+            font-size: 18px;
+            color: var(--gray-600);
+            max-width: 620px;
+            margin: 0 auto 40px;
             font-weight: 400;
             line-height: 1.6;
         }
 
         /* ── REPORT CARD SECTION ── */
-        #report-card { padding: 100px 24px; background: var(--gray-50); text-align: center; }
+        #report-card {
+            padding: 100px 24px;
+            background: var(--gray-50);
+            text-align: center;
+        }
+
         .card-container {
-            max-width: 440px; margin: 60px auto 0;
+            max-width: 440px;
+            margin: 60px auto 0;
             perspective: 1000px;
         }
+
         .agent-card {
             background: var(--white);
             border-radius: 24px;
             padding: 40px;
             text-align: left;
-            box-shadow: 0 40px 80px rgba(0,0,0,0.1);
+            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.1);
             border: 1px solid var(--gray-200);
             position: relative;
             overflow: hidden;
         }
-        .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; }
-        .card-title { font-family: var(--font-display); font-size: 20px; font-weight: 800; }
-        .card-badge {
-            background: #e0f4ff; color: #0088ff;
-            font-size: 10px; font-weight: 800;
-            padding: 4px 10px; border-radius: 100px;
-            text-transform: uppercase; letter-spacing: 0.1em;
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 32px;
         }
-        .card-stats { display: grid; gap: 24px; }
-        .cs-item .label { font-size: 12px; font-weight: 600; color: var(--gray-400); text-transform: uppercase; margin-bottom: 4px; display: block; }
-        .cs-item .val { font-family: var(--font-display); font-size: 24px; font-weight: 800; }
-        .cs-item .subtext { font-size: 13px; color: var(--gray-600); margin-top: 4px; }
+
+        .card-title {
+            font-family: var(--font-display);
+            font-size: 20px;
+            font-weight: 800;
+        }
+
+        .card-badge {
+            background: #e0f4ff;
+            color: #0088ff;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 100px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .card-stats {
+            display: grid;
+            gap: 24px;
+        }
+
+        .cs-item .label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--gray-400);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .cs-item .val {
+            font-family: var(--font-display);
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .cs-item .subtext {
+            font-size: 13px;
+            color: var(--gray-600);
+            margin-top: 4px;
+        }
+
         .verified-stamp {
-            position: absolute; bottom: 20px; right: 20px;
-            border: 2px solid var(--blue); color: var(--blue);
-            padding: 4px 12px; border-radius: 6px;
-            font-family: var(--font-display); font-size: 12px; font-weight: 800;
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            border: 2px solid var(--blue);
+            color: var(--blue);
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-family: var(--font-display);
+            font-size: 12px;
+            font-weight: 800;
             transform: rotate(-12deg);
             opacity: 0.8;
         }
-        .card-actions { display: flex; gap: 12px; margin-top: 32px; justify-content: center; }
+
+        .card-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 32px;
+            justify-content: center;
+        }
+
         .share-btn {
-            background: var(--black); color: var(--white);
-            padding: 10px 20px; border-radius: 80px;
-            font-size: 13px; font-weight: 600; cursor: pointer;
+            background: var(--black);
+            color: var(--white);
+            padding: 10px 20px;
+            border-radius: 80px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
             border: none;
         }
 
         /* ── LIVE FEED ── */
         .live-feed-window {
-            width: 100%; max-width: 800px;
-            margin: 0 auto; background: var(--white);
-            border: 1px solid var(--gray-200); border-radius: 12px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.05);
-            overflow: hidden; text-align: left;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--white);
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            text-align: left;
         }
-        .window-header { padding: 12px 16px; background: var(--gray-50); border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; gap: 8px; }
-        .dot { width: 8px; height: 8px; border-radius: 50%; }
-        .dot-r { background: #ff5f56; }
-        .dot-y { background: #febc2e; }
-        .dot-g { background: #27c93f; }
-        .window-title { margin-left: 8px; font-size: 11px; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .window-header {
+            padding: 12px 16px;
+            background: var(--gray-50);
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .dot-r {
+            background: #ff5f56;
+        }
+
+        .dot-y {
+            background: #febc2e;
+        }
+
+        .dot-g {
+            background: #27c93f;
+        }
+
+        .window-title {
+            margin-left: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--gray-600);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
 
         .feed-content {
-            height: 320px; padding: 16px;
-            overflow: hidden; position: relative;
+            height: 320px;
+            padding: 16px;
+            overflow: hidden;
+            position: relative;
         }
+
         .feed-row {
-            display: flex; align-items: center; gap: 12px;
-            padding: 10px; border-bottom: 1px solid var(--gray-50);
-            font-size: 13px; animation: slideUp 20s linear infinite;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px;
+            border-bottom: 1px solid var(--gray-50);
+            font-size: 13px;
+            animation: slideUp 20s linear infinite;
         }
+
         @keyframes slideUp {
-            0% { transform: translateY(0); }
-            100% { transform: translateY(-300px); }
+            0% {
+                transform: translateY(0);
+            }
+
+            100% {
+                transform: translateY(-300px);
+            }
         }
-        .feed-agent { font-weight: 600; color: var(--black); min-width: 90px; }
-        .feed-action { color: var(--gray-600); flex-grow: 1; }
-        .feed-status { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
-        .s-info { background: #e0f4ff; color: #0088ff; }
-        .s-warn { background: #fff4e0; color: #c47d0a; }
+
+        .feed-agent {
+            font-weight: 600;
+            color: var(--black);
+            min-width: 90px;
+        }
+
+        .feed-action {
+            color: var(--gray-600);
+            flex-grow: 1;
+        }
+
+        .feed-status {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .s-info {
+            background: #e0f4ff;
+            color: #0088ff;
+        }
+
+        .s-warn {
+            background: #fff4e0;
+            color: #c47d0a;
+        }
 
         /* ── SECTIONS ── */
-        section { padding: 100px 24px; text-align: center; }
-        .section-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--blue); margin-bottom: 16px; display: block; }
-        h2 { font-family: var(--font-display); font-size: 44px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 40px; }
+        section {
+            padding: 100px 24px;
+            text-align: center;
+        }
+
+        .section-tag {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--blue);
+            margin-bottom: 16px;
+            display: block;
+        }
+
+        h2 {
+            font-family: var(--font-display);
+            font-size: 44px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 40px;
+        }
 
         .product-grid {
-            display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px;
-            max-width: 1200px; margin: 0 auto; text-align: left;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+            max-width: 1200px;
+            margin: 0 auto;
+            text-align: left;
         }
-        .p-card h3 { font-size: 18px; margin-bottom: 12px; }
-        .p-card p { font-size: 15px; color: var(--gray-600); }
+
+        .p-card h3 {
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
+        .p-card p {
+            font-size: 15px;
+            color: var(--gray-600);
+        }
 
         /* ── CTA ── */
-        #cta { background: var(--black); color: var(--white); }
-        .signup-form { display: flex; gap: 8px; margin: 32px auto 0; max-width: 440px; }
-        .signup-input { flex-grow: 1; padding: 16px; border-radius: 8px; border: none; font-size: 16px; }
-        .signup-btn { background: var(--blue); color: var(--white); border: none; padding: 0 24px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        #cta {
+            background: var(--black);
+            color: var(--white);
+        }
 
-        footer { padding: 60px 24px; border-top: 1px solid var(--gray-100); text-align: center; color: var(--gray-400); font-size: 13px; }
+        .signup-form {
+            display: flex;
+            gap: 8px;
+            margin: 32px auto 0;
+            max-width: 440px;
+        }
+
+        .signup-input {
+            flex-grow: 1;
+            padding: 16px;
+            border-radius: 8px;
+            border: none;
+            font-size: 16px;
+        }
+
+        .signup-btn {
+            background: var(--blue);
+            color: var(--white);
+            border: none;
+            padding: 0 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        footer {
+            padding: 60px 24px;
+            border-top: 1px solid var(--gray-100);
+            text-align: center;
+            color: var(--gray-400);
+            font-size: 13px;
+        }
     </style>
 </head>
 
@@ -218,8 +456,9 @@
     <section id="hero">
         <span class="section-tag">For OpenClaw & Moltbook Operators</span>
         <h1>Discover the surprising truth about your agents.</h1>
-        <p class="hero-sub">"Last week: 847 agent actions. Operator approved 12." — that's the visibility gap Vequil closes. See every syscall, reasoning step, and budget leak in real-time. Free, forever.</p>
-        
+        <p class="hero-sub">"Last week: 847 agent actions. Operator approved 12." — that's the visibility gap Vequil
+            closes. See every syscall, reasoning step, and budget leak in real-time. Free, forever.</p>
+
         <div class="live-feed-window">
             <div class="window-header">
                 <div class="dot dot-r"></div>
@@ -228,28 +467,35 @@
                 <span class="window-title">Vequil Audit Log</span>
             </div>
             <div class="feed-content">
-                <div class="feed-row"><span class="feed-agent">OpenClaw</span><span class="feed-action">Browsing dark-web-analytics...</span><span class="feed-status s-warn">Audit</span></div>
-                <div class="feed-row"><span class="feed-agent">Moltbook</span><span class="feed-action">Refactoring `payment.ts`</span><span class="feed-status s-info">Active</span></div>
-                <div class="feed-row"><span class="feed-agent">Claude</span><span class="feed-action">High-reasoning tool call ($0.12)</span><span class="feed-status s-info">Logged</span></div>
-                <div class="feed-row"><span class="feed-agent">OpenClaw</span><span class="feed-action">Detected recursive logic loop</span><span class="feed-status s-warn">Flagged</span></div>
-                <div class="feed-row"><span class="feed-agent">Moltbook</span><span class="feed-action">Deleting old test files</span><span class="feed-status s-info">Done</span></div>
-                <div class="feed-row"><span class="feed-agent">OpenAI</span><span class="feed-action">Prompt injection attempt caught</span><span class="feed-status s-warn">Blocked</span></div>
+                <div class="feed-row"><span class="feed-agent">OpenClaw</span><span class="feed-action">Browsing
+                        dark-web-analytics...</span><span class="feed-status s-warn">Audit</span></div>
+                <div class="feed-row"><span class="feed-agent">Moltbook</span><span class="feed-action">Refactoring
+                        `payment.ts`</span><span class="feed-status s-info">Active</span></div>
+                <div class="feed-row"><span class="feed-agent">Claude</span><span class="feed-action">High-reasoning
+                        tool call ($0.12)</span><span class="feed-status s-info">Logged</span></div>
+                <div class="feed-row"><span class="feed-agent">OpenClaw</span><span class="feed-action">Detected
+                        recursive logic loop</span><span class="feed-status s-warn">Flagged</span></div>
+                <div class="feed-row"><span class="feed-agent">Moltbook</span><span class="feed-action">Deleting old
+                        test files</span><span class="feed-status s-info">Done</span></div>
+                <div class="feed-row"><span class="feed-agent">OpenAI</span><span class="feed-action">Prompt injection
+                        attempt caught</span><span class="feed-status s-warn">Blocked</span></div>
             </div>
         </div>
     </section>
 
     <section id="report-card">
-        <span class="section-tag">Viral proof</span>
+        <span class="section-tag">Operator benchmark</span>
         <h2>Your Weekly Agent Report Card.</h2>
-        <p class="hero-sub">The public proof of a safe, efficient agent fleet. Share your stats with the Moltbook community. Join the elite 1% of operators with real visibility.</p>
-        
+        <p class="hero-sub">A trust layer for agent operations. Share high-level reliability and safety metrics with
+            your team or community while keeping sensitive audit details private.</p>
+
         <div class="card-container">
             <div class="agent-card">
                 <div class="card-header">
                     <div class="card-title">Agent Quality Score</div>
                     <div class="card-badge">Week 14 · A+</div>
                 </div>
-                
+
                 <div class="card-stats">
                     <div class="cs-item">
                         <span class="label">Weekly Activity</span>
@@ -270,10 +516,11 @@
 
                 <div class="verified-stamp">VERIFIED BY VEQUIL</div>
             </div>
-            
+
             <div class="card-actions">
                 <button class="share-btn">Share on X</button>
-                <button class="share-btn" style="background: var(--gray-100); color: var(--black);">Copy public link</button>
+                <button class="share-btn" style="background: var(--gray-100); color: var(--black);">Copy public
+                    link</button>
             </div>
         </div>
     </section>
@@ -284,15 +531,18 @@
         <div class="product-grid">
             <div class="p-card">
                 <h3>Absolute Visibility</h3>
-                <p>Never wonder what your agent is thinking. Every reasoning step and tool call is captured in a clean, searchable, public or private ledger.</p>
+                <p>Never wonder what your agent is thinking. Every reasoning step and tool call is captured in a clean,
+                    searchable, public or private ledger.</p>
             </div>
             <div class="p-card">
                 <h3>Anomaly Detection</h3>
-                <p>Spotted an agent looping on a single task for 3 hours? Vequil flags outlier behavior before your API bill explodes.</p>
+                <p>Spotted an agent looping on a single task for 3 hours? Vequil flags outlier behavior before your API
+                    bill explodes.</p>
             </div>
             <div class="p-card">
                 <h3>Built for OpenClaw</h3>
-                <p>Deep native support for the OpenClaw and Moltbook ecosystem. Forward your logs via our simple SDK or webhook listener.</p>
+                <p>Deep native support for the OpenClaw and Moltbook ecosystem. Forward your logs via our simple SDK or
+                    webhook listener.</p>
             </div>
         </div>
     </section>
@@ -300,7 +550,8 @@
     <section id="integrations">
         <span class="section-tag">Integrations</span>
         <h2>Works where you build.</h2>
-        <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 40px; margin-top: 40px; font-weight: 700; color: var(--gray-400); font-size: 20px;">
+        <div
+            style="display: flex; flex-wrap: wrap; justify-content: center; gap: 40px; margin-top: 40px; font-weight: 700; color: var(--gray-400); font-size: 20px;">
             <span>OpenClaw</span>
             <span>Moltbook</span>
             <span>Claude</span>
@@ -312,27 +563,32 @@
 
     <section id="pricing">
         <span class="section-tag">Pricing</span>
-        <h2>Simple. Free. Forever.</h2>
+            <h2>Simple pricing that scales with you.</h2>
         <div style="display: flex; gap: 24px; max-width: 800px; margin: 0 auto; text-align: left;">
             <div style="flex:1; padding: 40px; border: 1px solid var(--gray-200); border-radius: 12px;">
-                <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px;">Personal</div>
-                <div style="font-family: var(--font-display); font-size: 40px; font-weight: 800; margin-bottom: 24px;">$0</div>
+                <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px;">Starter</div>
+                <div style="font-family: var(--font-display); font-size: 40px; font-weight: 800; margin-bottom: 24px;">
+                    $0</div>
                 <ul style="list-style: none; font-size: 14px; color: var(--gray-600);">
-                    <li style="margin-bottom: 8px;">✓ Unlimited agents</li>
+                    <li style="margin-bottom: 8px;">✓ Up to 5 agents</li>
                     <li style="margin-bottom: 8px;">✓ Weekly Report Cards</li>
                     <li style="margin-bottom: 8px;">✓ 30-day activity history</li>
                 </ul>
-                <a href="#cta" class="nav-cta" style="display: block; text-align: center; margin-top: 32px;">Start Logging</a>
+                <a href="#cta" class="nav-cta" style="display: block; text-align: center; margin-top: 32px;">Start
+                    Logging</a>
             </div>
             <div style="flex:1; padding: 40px; border: 1px solid var(--black); border-radius: 12px;">
-                <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px;">Pro</div>
-                <div style="font-family: var(--font-display); font-size: 40px; font-weight: 800; margin-bottom: 24px;">$9</div>
+                <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px;">Growth</div>
+                <div style="font-family: var(--font-display); font-size: 40px; font-weight: 800; margin-bottom: 24px;">
+                    $9</div>
                 <ul style="list-style: none; font-size: 14px; color: var(--gray-600);">
+                    <li style="margin-bottom: 8px;">✓ Unlimited agents</li>
                     <li style="margin-bottom: 8px;">✓ Lifetime history</li>
                     <li style="margin-bottom: 8px;">✓ Detailed audit traces</li>
                     <li style="margin-bottom: 8px;">✓ Priority support</li>
                 </ul>
-                <a href="#cta" class="nav-cta" style="display: block; text-align: center; margin-top: 32px; background: var(--blue);">Go Pro</a>
+                <a href="#cta" class="nav-cta"
+                    style="display: block; text-align: center; margin-top: 32px; background: var(--blue);">Go Pro</a>
             </div>
         </div>
     </section>
@@ -340,7 +596,8 @@
     <section id="cta">
         <div style="max-width: 600px; margin: 0 auto;">
             <h2>Get early access.</h2>
-            <p style="color: var(--gray-400); margin-top: 16px;">We're launching the Vequil Pro beta soon. Join 1,200+ Moltbook developers on the waitlist.</p>
+            <p style="color: var(--gray-400); margin-top: 16px;">We are onboarding design partners now. Join the
+                waitlist to help shape the operator standard for agent reliability.</p>
             <form class="signup-form" onsubmit="window.handleSubmit(event)">
                 <input type="email" class="signup-input" placeholder="you@example.com" required>
                 <button type="submit" class="signup-btn">Join Waitlist</button>
@@ -383,4 +640,5 @@
         };
     </script>
 </body>
+
 </html>

@@ -449,7 +449,10 @@ $('share-x-btn')?.addEventListener('click', () => {
 $('copy-report-link')?.addEventListener('click', (e) => {
     const btn = e.target;
     const oldText = btn.textContent;
-    navigator.clipboard.writeText(window.location.href + '#report');
+    const eventId = $('event-selector').value || 'latest';
+    const publicUrl = window.location.origin + '/report/' + eventId;
+    
+    navigator.clipboard.writeText(publicUrl);
     btn.textContent = 'Link Copied!';
     setTimeout(() => btn.textContent = oldText, 2000);
 });

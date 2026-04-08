@@ -47,6 +47,88 @@ export VEQUIL_ENDPOINT=http://localhost:8000/api/log
 
 Full guide: [README_OPENCLAW.md](misc/openclaw/README_OPENCLAW.md)
 
+## Production toggles
+
+Environment variables used by the server:
+
+- `DASHBOARD_API_KEY`: API key required for private API access.
+- `VEQUIL_REQUIRE_AUTH`: defaults to `1` (auth required). Set `0` only for local demos.
+- `VEQUIL_PUBLIC_RATE_LIMIT`: per-IP per-minute limit for public endpoints (default `60`).
+- `VEQUIL_CORS_ALLOW_ORIGIN`: CORS allow origin (default `*`).
+
+## Growth playbook
+
+For Moltbook distribution via OpenClaw, see [moltbook_go_to_market.md](docs/moltbook_go_to_market.md).
+
+### Generate Moltbook posts (local)
+
+Generate 3 Moltbook-ready drafts from your latest `dashboard.json`:
+
+```bash
+python scripts/moltbook_campaign.py
+```
+
+Optionally rewrite them via OpenClaw (must have `openclaw` in PATH):
+
+```bash
+python scripts/moltbook_campaign.py --openclaw --thinking high
+```
+
+## Multi-tenant ingestion (beta)
+
+Vequil now supports workspace-scoped ingest keys and a stable `/api/ingest` schema.
+
+1) Create a workspace (admin key protected):
+
+```bash
+curl -sS -X POST "http://localhost:8000/api/workspaces" \
+  -H "X-API-Key: $DASHBOARD_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Context Operator","slug":"contextoperator"}'
+```
+
+2) Use the returned `ingest_api_key` in `X-Workspace-Key`:
+
+```bash
+curl -sS -X POST "http://localhost:8000/api/ingest" \
+  -H "X-Workspace-Key: vk_ws_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source":"openclaw",
+    "event_type":"tool_call",
+    "event_status":"success",
+    "event_at":"2026-04-08T01:30:00Z",
+    "agent_id":"ops-agent-1",
+    "session_id":"session-123",
+    "tool_name":"bash",
+    "cost_usd":0.012,
+    "metadata":{"action_id":"abc123","project":"vequil"}
+  }'
+```
+
+Manage workspace ingest keys:
+
+```bash
+# list keys
+curl -sS -H "X-API-Key: $DASHBOARD_API_KEY" \
+  "http://localhost:8000/api/workspaces/1/keys"
+
+# create a new key
+curl -sS -X POST -H "X-API-Key: $DASHBOARD_API_KEY" \
+  "http://localhost:8000/api/workspaces/1/keys"
+
+# revoke a key
+curl -sS -X DELETE -H "X-API-Key: $DASHBOARD_API_KEY" \
+  "http://localhost:8000/api/workspaces/1/keys/2"
+```
+
+Quick onboarding payload:
+
+```bash
+curl -sS -H "X-API-Key: $DASHBOARD_API_KEY" \
+  "http://localhost:8000/api/onboarding/quickstart"
+```
+
 ## What Gets Logged
 
 - Every tool call and result
