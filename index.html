@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>chiron — automated Kalshi arbitrage</title>
+  <meta name="description" content="Open-source automated arbitrage between crypto CEX feeds and Kalshi prediction markets. Black-Scholes pricing, Kelly sizing, zero learned parameters.">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -14,7 +15,7 @@
       --green: #00ff88;
       --green-dim: #00cc6a;
       --muted: #555;
-      --text: #ccc;
+      --text: #999;
       --white: #eee;
       --font: 'Courier New', Courier, monospace;
     }
@@ -35,7 +36,7 @@
 
     /* ── Layout ── */
     .container {
-      max-width: 760px;
+      max-width: 720px;
       margin: 0 auto;
       padding: 0 24px;
     }
@@ -43,7 +44,7 @@
     /* ── Nav ── */
     nav {
       border-bottom: 1px solid var(--border);
-      padding: 16px 0;
+      padding: 18px 0;
     }
     nav .container {
       display: flex;
@@ -52,9 +53,9 @@
     }
     .nav-logo {
       color: var(--green);
-      font-size: 18px;
+      font-size: 16px;
       font-weight: bold;
-      letter-spacing: 2px;
+      letter-spacing: 3px;
     }
     .nav-links { display: flex; gap: 24px; }
     .nav-links a { color: var(--muted); font-size: 13px; }
@@ -62,27 +63,39 @@
 
     /* ── Hero ── */
     .hero {
-      padding: 80px 0 64px;
+      padding: 100px 0 80px;
       text-align: center;
     }
-    .prompt {
+    .eyebrow {
       color: var(--muted);
-      font-size: 13px;
-      margin-bottom: 16px;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 28px;
     }
-    .prompt span { color: var(--green); }
     h1 {
-      font-size: clamp(42px, 8vw, 72px);
+      font-size: clamp(52px, 10vw, 88px);
       color: var(--white);
-      letter-spacing: 6px;
-      margin-bottom: 20px;
+      letter-spacing: 8px;
+      margin-bottom: 28px;
       line-height: 1;
     }
     .tagline {
       color: var(--text);
-      font-size: 15px;
-      max-width: 480px;
-      margin: 0 auto 40px;
+      font-size: 14px;
+      max-width: 520px;
+      margin: 0 auto 12px;
+      line-height: 1.9;
+    }
+    .tagline strong {
+      color: var(--white);
+      font-weight: normal;
+    }
+    .sub-tagline {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 1px;
+      margin-bottom: 48px;
     }
 
     /* ── Install block ── */
@@ -91,70 +104,88 @@
       align-items: center;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 14px 20px;
-      gap: 12px;
+      border-radius: 4px;
+      padding: 14px 56px 14px 20px;
+      gap: 10px;
       cursor: pointer;
       position: relative;
+      transition: border-color 0.15s;
     }
-    .install-wrap:hover { border-color: var(--green); }
+    .install-wrap:hover { border-color: var(--green-dim); }
     .install-prompt { color: var(--green-dim); user-select: none; }
-    .install-cmd { color: var(--white); font-size: 15px; letter-spacing: 0.5px; }
+    .install-cmd { color: var(--white); font-size: 14px; }
     .copy-hint {
       color: var(--muted);
       font-size: 11px;
       position: absolute;
-      right: 14px;
+      right: 16px;
       top: 50%;
       transform: translateY(-50%);
+      transition: color 0.15s;
     }
     .install-wrap:hover .copy-hint { color: var(--green); }
 
-    /* ── Stats ── */
-    .stats {
-      display: flex;
-      justify-content: center;
-      gap: 40px;
-      margin: 56px 0;
-      flex-wrap: wrap;
+    /* ── Edge section ── */
+    .edge {
+      padding: 56px 0;
+      border-top: 1px solid var(--border);
     }
-    .stat { text-align: center; }
-    .stat-value {
-      font-size: 28px;
+    .edge-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 2px;
+    }
+    .edge-card {
+      background: var(--surface);
+      padding: 24px;
+    }
+    .edge-card:first-child { border-radius: 4px 0 0 4px; }
+    .edge-card:last-child  { border-radius: 0 4px 4px 0; }
+    .edge-num {
       color: var(--green);
-      display: block;
-      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 2px;
+      margin-bottom: 10px;
     }
-    .stat-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+    .edge-title {
+      color: var(--white);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .edge-body {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.8;
+    }
 
     /* ── Section ── */
-    section { padding: 48px 0; border-top: 1px solid var(--border); }
+    section { padding: 56px 0; border-top: 1px solid var(--border); }
     .section-label {
       color: var(--green);
       font-size: 11px;
       letter-spacing: 2px;
       text-transform: uppercase;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
     }
-    h2 { color: var(--white); font-size: 20px; margin-bottom: 16px; }
 
     /* ── Pipeline ── */
     .pipeline {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 24px;
+      border-radius: 4px;
+      overflow: hidden;
     }
     .pipeline-step {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 8px 0;
+      display: grid;
+      grid-template-columns: 24px 200px 1fr;
+      align-items: start;
+      gap: 16px;
+      padding: 16px 24px;
     }
     .pipeline-step + .pipeline-step { border-top: 1px solid var(--border); }
-    .step-arrow { color: var(--green); width: 20px; flex-shrink: 0; margin-top: 1px; }
-    .step-name { color: var(--white); min-width: 180px; }
-    .step-desc { color: var(--muted); font-size: 13px; }
+    .step-arrow { color: var(--green); margin-top: 1px; }
+    .step-name { color: var(--white); font-size: 13px; }
+    .step-desc { color: var(--muted); font-size: 12px; line-height: 1.7; }
 
     /* ── Risk table ── */
     table {
@@ -171,12 +202,12 @@
       border-bottom: 1px solid var(--border);
     }
     td {
-      padding: 10px 0;
+      padding: 11px 0;
       border-bottom: 1px solid var(--border);
       font-size: 13px;
     }
     td:first-child { color: var(--text); }
-    td:last-child { color: var(--green); text-align: right; }
+    td:last-child { color: var(--green); text-align: right; font-variant-numeric: tabular-nums; }
 
     /* ── CTAs ── */
     .ctas {
@@ -184,16 +215,17 @@
       gap: 16px;
       justify-content: center;
       flex-wrap: wrap;
-      padding: 56px 0 40px;
+      padding: 64px 0 48px;
     }
     .btn {
-      padding: 12px 28px;
+      padding: 12px 32px;
       border-radius: 4px;
       font-family: var(--font);
       font-size: 13px;
       cursor: pointer;
       letter-spacing: 1px;
       display: inline-block;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
     }
     .btn-primary {
       background: var(--green);
@@ -205,21 +237,24 @@
       border: 1px solid var(--border);
       color: var(--text);
     }
-    .btn-secondary:hover { border-color: var(--green); color: var(--green); text-decoration: none; }
+    .btn-secondary:hover { border-color: var(--green-dim); color: var(--green); text-decoration: none; }
 
     /* ── Footer ── */
     footer {
       border-top: 1px solid var(--border);
-      padding: 24px 0;
+      padding: 28px 0;
       text-align: center;
     }
-    .footer-disc { color: var(--muted); font-size: 11px; line-height: 1.8; }
+    .footer-disc { color: var(--muted); font-size: 11px; line-height: 2; }
 
     /* ── Responsive ── */
-    @media (max-width: 500px) {
-      .stats { gap: 28px; }
-      .step-name { min-width: 140px; }
-      .install-wrap { padding: 12px 16px; }
+    @media (max-width: 600px) {
+      .edge-grid { grid-template-columns: 1fr; gap: 2px; }
+      .edge-card:first-child { border-radius: 4px 4px 0 0; }
+      .edge-card:last-child  { border-radius: 0 0 4px 4px; }
+      .pipeline-step { grid-template-columns: 20px 1fr; }
+      .step-name { grid-column: 2; }
+      .step-desc { grid-column: 2; }
     }
   </style>
 </head>
@@ -236,39 +271,48 @@
 </nav>
 
 <main>
-  <div class="hero container">
-    <p class="prompt"><span>$</span> pip install git+https://github.com/nxd914/chiron.git</p>
-    <h1>chiron</h1>
-    <p class="tagline">Automated BTC/ETH arbitrage for Kalshi prediction markets. Black-Scholes pricing, Kelly sizing, zero learned parameters.</p>
-    <div class="install-wrap" onclick="copyInstall(this)">
-      <span class="install-prompt">$</span>
-      <span class="install-cmd">pip install git+https://github.com/nxd914/chiron.git</span>
-      <span class="copy-hint">click to copy</span>
+  <div class="container">
+    <div class="hero">
+      <p class="eyebrow">open source · python · kalshi</p>
+      <h1>chiron</h1>
+      <p class="tagline">
+        Automated arbitrage between <strong>real-time crypto CEX feeds</strong> and
+        Kalshi BTC/ETH prediction markets.
+      </p>
+      <p class="sub-tagline">Black-Scholes N(d2) pricing &nbsp;·&nbsp; Kelly-capped sizing &nbsp;·&nbsp; Zero learned parameters</p>
+      <div class="install-wrap" onclick="copyInstall(this)">
+        <span class="install-prompt">$</span>
+        <span class="install-cmd">pip install git+https://github.com/nxd914/chiron.git</span>
+        <span class="copy-hint">copy</span>
+      </div>
     </div>
   </div>
 
-  <div class="stats container">
-    <div class="stat">
-      <span class="stat-value">+$391</span>
-      <span class="stat-label">Paper P&amp;L</span>
-    </div>
-    <div class="stat">
-      <span class="stat-value">100%</span>
-      <span class="stat-label">Win rate</span>
-    </div>
-    <div class="stat">
-      <span class="stat-value">8</span>
-      <span class="stat-label">Fills</span>
-    </div>
-    <div class="stat">
-      <span class="stat-value">$5k</span>
-      <span class="stat-label">Bankroll</span>
+  <div class="edge">
+    <div class="container">
+      <div class="edge-grid">
+        <div class="edge-card">
+          <p class="edge-num">01</p>
+          <p class="edge-title">The signal</p>
+          <p class="edge-body">Binance.US and Coinbase WebSocket feeds deliver BTC/ETH spot ticks with sub-second latency.</p>
+        </div>
+        <div class="edge-card">
+          <p class="edge-num">02</p>
+          <p class="edge-title">The gap</p>
+          <p class="edge-body">Kalshi contract prices reflect stale CEX data. Spot-price propagation lag creates predictable mispricings.</p>
+        </div>
+        <div class="edge-card">
+          <p class="edge-num">03</p>
+          <p class="edge-title">The trade</p>
+          <p class="edge-body">Chiron sizes a Kelly-optimal position when edge exceeds 4%, then waits for convergence at settlement.</p>
+        </div>
+      </div>
     </div>
   </div>
 
   <section>
     <div class="container">
-      <p class="section-label">// how it works</p>
+      <p class="section-label">pipeline</p>
       <div class="pipeline">
         <div class="pipeline-step">
           <span class="step-arrow">→</span>
@@ -278,12 +322,12 @@
         <div class="pipeline-step">
           <span class="step-arrow">→</span>
           <span class="step-name">FeatureAgent</span>
-          <span class="step-desc">Welford rolling vol/momentum (60s signal, 15min pricing windows)</span>
+          <span class="step-desc">Welford rolling vol/momentum — 60s signal window, 15min pricing window</span>
         </div>
         <div class="pipeline-step">
           <span class="step-arrow">→</span>
           <span class="step-name">ScannerAgent</span>
-          <span class="step-desc">N(d2) Black-Scholes pricing vs live Kalshi ask — finds mispriced contracts</span>
+          <span class="step-desc">N(d2) Black-Scholes pricing vs live Kalshi ask — surfaces mispriced contracts</span>
         </div>
         <div class="pipeline-step">
           <span class="step-arrow">→</span>
@@ -295,13 +339,18 @@
           <span class="step-name">ExecutionAgent</span>
           <span class="step-desc">Places orders, logs to SQLite audit trail with full signal context</span>
         </div>
+        <div class="pipeline-step">
+          <span class="step-arrow">→</span>
+          <span class="step-name">ResolutionAgent</span>
+          <span class="step-desc">Settlement polling, P&amp;L close, position cleanup</span>
+        </div>
       </div>
     </div>
   </section>
 
   <section>
     <div class="container">
-      <p class="section-label">// risk controls</p>
+      <p class="section-label">risk controls</p>
       <table>
         <thead>
           <tr><th>Control</th><th>Value</th></tr>
@@ -320,16 +369,20 @@
     </div>
   </section>
 
-  <div class="ctas container">
-    <a class="btn btn-primary" href="https://github.com/nxd914/chiron">View on GitHub</a>
-    <a class="btn btn-secondary" href="https://github.com/nxd914/chiron#readme">Read the Docs</a>
+  <div class="container">
+    <div class="ctas">
+      <a class="btn btn-primary" href="https://github.com/nxd914/chiron">View on GitHub</a>
+      <a class="btn btn-secondary" href="https://github.com/nxd914/chiron#readme">Read the Docs</a>
+    </div>
   </div>
 </main>
 
 <footer>
   <div class="container">
-    <p class="footer-disc">Paper mode only. Not financial advice. Past paper performance is not indicative of future results.<br>
-    You can lose all your capital. Use at your own risk.</p>
+    <p class="footer-disc">
+      Paper mode only. Not financial advice.<br>
+      Past performance is not indicative of future results. Trading involves risk of loss.
+    </p>
   </div>
 </footer>
 
@@ -339,7 +392,7 @@
       const hint = el.querySelector('.copy-hint');
       hint.textContent = 'copied!';
       hint.style.color = 'var(--green)';
-      setTimeout(() => { hint.textContent = 'click to copy'; hint.style.color = ''; }, 2000);
+      setTimeout(() => { hint.textContent = 'copy'; hint.style.color = ''; }, 2000);
     });
   }
 </script>

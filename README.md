@@ -1,4 +1,4 @@
-x# chiron
+# chiron
 
 [![Python](https://img.shields.io/badge/python-3.11+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Kalshi](https://img.shields.io/badge/exchange-Kalshi-0a1628.svg)](https://kalshi.com)
@@ -6,9 +6,9 @@ x# chiron
 [![Tests](https://img.shields.io/badge/tests-pytest-009688.svg?logo=pytest&logoColor=white)](./chiron/tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
-Automated BTC/ETH arbitrage for prediction markets.
+Automated arbitrage between real-time crypto CEX feeds and Kalshi BTC/ETH prediction markets.
 
-**Edge**: crypto spot-price propagation latency between global CEX feeds (Binance.US / Coinbase) and Kalshi BTC/ETH probability contracts. Deterministic Black-Scholes N(d2) pricing, Kelly-capped sizing, zero learned parameters in the execution path.
+**Edge**: spot-price propagation latency between Binance.US / Coinbase and Kalshi BTC/ETH probability contracts. Deterministic Black-Scholes N(d2) pricing, Kelly-capped sizing, zero learned parameters in the execution path.
 
 > Paper mode only. Not financial advice.
 
@@ -73,7 +73,6 @@ Create a `.env` file at the repo root or export these in your shell.
 | Max hours to expiry | 4 |
 | Min seconds between fills | 30 |
 | Spread floor | 4% |
-
 
 ## Development
 
