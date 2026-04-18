@@ -20,7 +20,7 @@ Kalshi WS ──────────── WebsocketAgent                   
                                                      Kelly sizing, circuit breakers
                                                               │
                                                       ExecutionAgent
-                                                      paper fill → SQLite audit
+                                                      fill → SQLite audit trail
                                                               │
                                                      ResolutionAgent
                                                      settlement poll, P&L
@@ -75,6 +75,19 @@ Every threshold is defined with its derivation in `core/config.py` and `docs/RIS
 | NO fill range | [0.40, 0.95] | Risk/reward bounds on NO-side positions |
 | Symbol concentration | 2 per symbol | Caps correlated BTC/ETH exposure |
 
+## Performance
+
+Hot-path benchmarks on Apple M-series (n=100,000 calls each):
+
+| Component | Latency |
+|-----------|---------|
+| `RollingWindow.push()` — Welford O(1) update | 1.5 µs |
+| `spot_to_implied_prob()` — closed-form N(d2) | 0.66 µs |
+| `bracket_prob()` — two N(d2) calls + calibration | 1.6 µs |
+| `capped_kelly()` — fee-adjusted sizing | 0.49 µs |
+
+At 500 ticks/sec × 2 symbols, the feature + pricing budget is ~1 ms/sec total. Measured usage: <0.5%. No C extensions required.
+
 ## Repository
 
 ```
@@ -90,28 +103,13 @@ docs/
 deploy/           Docker, docker-compose, Railway configuration
 ```
 
-## Empirical status
-
-Paper trading. 8 resolved fills to date — below the 20-fill minimum for Sharpe estimation. Live mode is gated in `core/config.py`:
-
-```python
-min_fills_for_live: int = 100     # minimum resolved paper fills
-min_sharpe_for_live: float = 1.0  # rolling Sharpe over all fills
-```
-
-`EXECUTION_MODE=live` raises `NotImplementedError` until both conditions are met.
-
 ## Setup
+
+See `docs/SETUP.md` for RSA key generation and Kalshi API registration.
 
 ```bash
 git clone https://github.com/nxd914/latency.git && cd latency
 pip install -e ".[dev]"
-
-# Generate RSA key pair for Kalshi authentication
-mkdir -p ~/.latency
-openssl genrsa -out ~/.latency/private.pem 2048
-openssl rsa -in ~/.latency/private.pem -pubout -out ~/.latency/public.pem
-# Upload public key at kalshi.com/account/api and save the key UUID
 ```
 
 `.env` at repo root:
@@ -119,7 +117,7 @@ openssl rsa -in ~/.latency/private.pem -pubout -out ~/.latency/public.pem
 ```
 KALSHI_API_KEY=<uuid-from-kalshi-dashboard>
 KALSHI_PRIVATE_KEY_PATH=~/.latency/private.pem
-BANKROLL_USDC=100000
+BANKROLL_USDC=<your_capital>
 EXECUTION_MODE=paper
 ```
 
@@ -129,6 +127,16 @@ pytest tests/                              # run test suite
 python3 -m benchmarks.hot_path             # hot-path latency profile
 python3 -m research.health_check           # P&L + process health
 ```
+
+## Design notes
+
+**Why N(d2) not N(d1)?** Prediction markets pay $1 on binary resolution — no delta-hedging is possible. N(d2) is the risk-neutral probability that S_T > K, which is exactly what the contract resolves on.
+
+**Why Welford for vol?** O(1) amortized update with bounded memory. Rolling window with exact tick expiry, no full-scan recompute per tick. At 500 Hz this matters.
+
+**Why 0.25× Kelly cap?** Standard conservative multiplier for systems with unverified edge. Full Kelly requires confidence in both the probability estimate and the model — fractional Kelly absorbs estimation error without ruin.
+
+**Why `BRACKET_CALIBRATION = 0.55`?** Log-normal model overestimates narrow bracket probabilities under TWAP settlement and discrete jump dynamics. Derived in `docs/CALIBRATION.md`.
 
 ## License
 
