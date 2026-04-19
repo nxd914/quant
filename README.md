@@ -1,9 +1,10 @@
-[![GitHub stars](https://img.shields.io/github/stars/nxd914/latency?style=social)](https://github.com/nxd914/latency/stargazers)
-[![License](https://img.shields.io/github/license/nxd914/latency)](https://github.com/nxd914/latency/blob/main/LICENSE)
-[![Top Language](https://img.shields.io/github/languages/top/nxd914/latency)](https://github.com/nxd914/latency)[![GitHub last commit](https://img.shields.io/github/last-commit/nxd914/latency)](https://github.com/nxd914/latency/commits/main)
-[![GitHub issues](https://img.shields.io/github/issues/nxd914/latency)](https://github.com/nxd914/latency/issues)
+[![CI](https://img.shields.io/github/actions/workflow/status/nxd914/kinzie/ci.yml?branch=main&label=CI)](https://github.com/nxd914/kinzie/actions)
+[![License](https://img.shields.io/github/license/nxd914/kinzie)](https://github.com/nxd914/kinzie/blob/main/LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org)
+[![GitHub last commit](https://img.shields.io/github/last-commit/nxd914/kinzie)](https://github.com/nxd914/kinzie/commits/main)
+[![GitHub stars](https://img.shields.io/github/stars/nxd914/kinzie?style=social)](https://github.com/nxd914/kinzie/stargazers)
 
-# Kalshi Crypto Latency Arbitrage
+# Kinzie — Proprietary Trading Research
 
 Spot-price propagation latency arbitrage on Kalshi crypto binary contracts.
 
@@ -113,7 +114,7 @@ deploy/           Docker, docker-compose, Railway configuration
 See `docs/SETUP.md` for RSA key generation and Kalshi API registration.
 
 ```bash
-git clone https://github.com/nxd914/latency.git && cd latency
+git clone https://github.com/nxd914/kinzie.git && cd kinzie
 pip install -e ".[dev]"
 ```
 
@@ -128,9 +129,17 @@ EXECUTION_MODE=paper
 
 ```bash
 PYTHONPATH=. python3 daemon.py              # start all agents
-pytest tests/                              # run test suite
+LOG_FORMAT=json PYTHONPATH=. python3 daemon.py  # structured JSON logging
+pytest tests/                              # run test suite (133+ passing)
+pytest tests/ --cov=core --cov=agents      # with coverage
 python3 -m benchmarks.hot_path             # hot-path latency profile
 python3 -m research.health_check           # P&L + process health
+python3 -m research.replay_backtest        # audit-trail replay + calibration
+```
+
+**Pre-commit (install once):**
+```bash
+pip install pre-commit && pre-commit install
 ```
 
 ## Design notes

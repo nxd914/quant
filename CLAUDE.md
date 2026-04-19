@@ -56,20 +56,35 @@ min_sharpe_for_live: float = 1.0  # rolling Sharpe over all fills
 
 `EXECUTION_MODE=live` raises `NotImplementedError` until both conditions are met.
 
-## Repo state (as of 2026-04-18)
+## Repo state (as of 2026-04-19)
 
-All institutional-grade hardening is complete (commit `e272aec`). Package renamed `chiron` → `latency` (commit `b35c499`). The physical folder rename (`chiron/` → `latency/`) must be done once by the user:
+All institutional-grade hardening complete. Prop-firm-grade infra layer added:
+
+- **CI/CD**: GitHub Actions on push/PR — ruff, mypy, pytest + coverage across Python 3.11/3.12.
+- **Pre-commit**: ruff (lint + format), mypy (core/ + agents/), trailing-whitespace, end-of-file.
+- **Structured logging**: `core/logging.py` — opt-in JSON via `LOG_FORMAT=json`. Default plain format preserved.
+- **Property-based tests**: `tests/test_pricing_properties.py` + `tests/test_kelly_properties.py` via Hypothesis.
+- **Replay backtester**: `python3 -m research.replay_backtest` — audit-trail calibration + Sharpe estimation.
+- **Ops runbook**: `docs/RUNBOOK.md` — circuit-breaker recovery, position-stuck recovery, restart procedures.
+- **Marketing site**: `index.html` fully updated (Systems section, Risk Framework table, GitHub link, legal pages, favicon, OG image, robots.txt, sitemap.xml, `wrangler.toml` for CF Pages).
+
+Package renamed `chiron` → `latency` (commit `b35c499`). The physical folder rename (`chiron/` → `latency/`) must be done once by the user:
 
 ```bash
 cd /Users/noahdonovan
 mv chiron latency
 cd latency
-PYTHONPATH=.. pytest tests/ -q   # expects 133 passed, 1 pre-existing failure
+PYTHONPATH=.. pytest tests/ -q   # expects 133+ passed
 ```
 
-The 1 pre-existing failure (`test_sync_rebuilds_positions_by_symbol`) is a Python 3.9 asyncio event loop incompatibility — not introduced by this work.
+The 1 pre-existing failure (`test_sync_rebuilds_positions_by_symbol`) is a Python 3.9 asyncio event loop incompatibility — not introduced by this work. Fixed in Python 3.11+.
 
-All imports already read `from latency.*`. Once the folder is renamed, no code changes are needed.
+## Non-model invariants
+
+- CI must stay green (`ruff check`, `ruff format --check`, `mypy`, `pytest`).
+- Pre-commit hooks must pass before commit.
+- Property-based tests in `test_pricing_properties.py` / `test_kelly_properties.py` must not be weakened — they describe mathematical contracts on the model's behavior.
+- `core/pricing.py`, `core/kelly.py`, `core/features.py`, `core/models.py` — frozen. Do not touch.
 
 ## Running locally
 
