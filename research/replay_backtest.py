@@ -55,7 +55,7 @@ def _load_fills(db_path: Path) -> list[FillRecord]:
             SELECT order_id, ticker, side, model_prob, market_prob, edge,
                    size_usdc, kelly_fraction, realized_vol, resolution, pnl_usdc
             FROM trades
-            WHERE status IN ('filled', 'resolved')
+            WHERE UPPER(status) IN ('FILLED', 'RESOLVED')
             ORDER BY placed_at ASC
             """
         ).fetchall()
