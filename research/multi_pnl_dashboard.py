@@ -14,6 +14,7 @@ Tables:
 """
 
 import sqlite3
+from core.db import connect as db_connect
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "data" / "paper_trades.db"
@@ -67,7 +68,7 @@ def main() -> None:
         print(f"Error: Database not found at {DB_PATH}")
         return
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
     print("════════════════════════════════════════════════════════════════")
@@ -95,7 +96,7 @@ def main() -> None:
                 env_rows = [r for r in rows if (r["environment"] or "unknown") == env]
                 s = _summary(env_rows, has_status=True)
                 _print_row(f"{name} [{env}]", s)
-                if env in ("paper", "live"):
+                if env.lower() in ("paper", "live"):
                     portfolio_pnl += s["realized"]
                     portfolio_total += s["total"]
                     portfolio_resolved += s["resolved"]

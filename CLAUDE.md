@@ -1,150 +1,83 @@
+## ⚠ Session orientation — read before doing anything
+
+- **GCE is canonical.** The local `data/paper_trades.db` is a stale copy of old `local_sim` fills.
+  Never run `research/` scripts locally to assess system state — always run on GCE:
+  `<SSH prefix> sudo docker exec kinzie-daemon-1 python3 -m research.<script>`
+  SSH prefix and VM details live in `RUNBOOK.local.md` (gitignored).
+- **`EXECUTION_MODE=paper`** means real orders against `demo-api.kalshi.co` (Kalshi demo, not sim).
+  "Paper" in the strategies table below means *deployed, 0 fills yet* — not a different execution mode.
+- **`environment` column** in the crypto `trades` table stores uppercase: `PAPER`, `LIVE`, `LOCAL_SIM`.
+  Any filtering code must use case-insensitive comparison (e.g. `env.lower() in ("paper", "live")`).
+- **`core/db.py`** is a required shared module (SQLite WAL helper). It must be present in the Docker
+  image. `ModuleNotFoundError: No module named 'core.db'` → the image is stale; rebuild and redeploy.
+
 ## System overview
 
-Spot-price propagation latency arbitrage on Kalshi crypto binary contracts. When BTC or ETH moves on Binance/Coinbase, Kalshi reprices seconds-to-minutes behind. The system measures that divergence with Black-Scholes N(d2) against Welford-estimated realized vol, enters when edge exceeds the threshold, and sizes positions with fee-adjusted Kelly criterion.
+Multi-strategy quant fund targeting Kalshi prediction market inefficiencies.
+Each strategy is a self-contained pipeline in `strategies/<name>/` — adding one never touches existing ones.
+Strategies may import from `core/` but must never modify other strategies. Each has its own daemon, config, and DB table.
 
-No learned parameters. No heuristics. Every decision is a deterministic function of spot price, realized vol, and the pricing model.
+## Strategies
 
-## Pipeline
+| # | Name | Path | Edge source | Status |
+|---|------|------|-------------|--------|
+| 1 | Crypto Latency Arb | `strategies/crypto/` | Black-Scholes N(d2) vs Welford realized vol on Kalshi crypto binaries; fee-adjusted Kelly sizing | **Demo-book testing** since 2026-05-01 |
+| 2 | Econ Data Arb | `strategies/econ/` | BLS/FRED post-release vs Kalshi MM reprice lag (CPI/NFP/PPI/FOMC) | Paper |
+| 3 | Sports Latency Arb | `strategies/sports/` | ESPN final scores vs Kalshi winner markets (NFL/NBA/MLB) | Paper |
+| 4 | Weather Data Arb | `strategies/weather/` | NOAA NWS readings vs Kalshi temp/precip thresholds (10 US cities) | Paper |
 
-```
-CryptoFeedAgent ──► FeatureAgent ──► ScannerAgent ──► RiskAgent ──► ExecutionAgent ──► ResolutionAgent
-                                          ▲
-                                    WebsocketAgent
-                                   (real-time price cache)
-```
+Each strategy: `strategies/<name>/daemon.py` is the entry point; Docker service is `daemon` (crypto), `<name>-daemon` (others).
 
-All agents are `async`. Coordination via typed `asyncio.Queue` instances and a read-only WebSocket price cache.
+**Crypto pipeline:** `CryptoFeedAgent → FeatureAgent → ScannerAgent → RiskAgent → ExecutionAgent → ResolutionAgent` (+ `WebsocketAgent` feeding FeatureAgent).
+Currently in demo-book testing against `demo-api.kalshi.co`. No published baseline — re-baselining from scratch on real demo fills. Earlier `local_sim` synth-fill numbers are not representative and should not be cited.
 
-Entry point: `daemon.py` at repo root.
-
-## Package layout
-
-```
-latency/             ← repo root IS the package (has __init__.py)
-  agents/            Async execution layer — seven concurrent agents
-  core/              Pure math + models — no I/O, no side effects
-  tests/             Pytest suite (11 modules, AAA pattern)
-  benchmarks/        Hot-path profiling
-  research/          P&L analysis tools (replay_backtest, health_check)
-  data/              SQLite trade log (paper_trades.db — gitignored)
-  deploy/            Docker + GCE deployment config
-```
+Econ calendar hardcoded in `strategies/econ/core/calendar.py` — update annually. FOMC fetch needs `FRED_API_KEY`.
 
 ## Core invariants
 
-- `core/pricing.py` and `core/kelly.py` are pure math — frozen, do not touch.
-- `core/config.py` is the single source of truth for every numeric threshold.
-- Paper mode is default. `EXECUTION_MODE=live` raises `NotImplementedError` until gates are met.
-- Every trade persisted to SQLite with full audit trail.
-- `RiskAgent` encapsulates all position state — never access private attributes directly.
+- `strategies/crypto/core/pricing.py` and `core/kelly.py` are pure math — frozen.
+- `strategies/<name>/core/config.py` is the single source of truth for that strategy's thresholds.
+- `EXECUTION_MODE` (resolved in `core/environment.py`):
+  - `local_sim` — no network, synthesizes fills locally.
+  - `paper` (default) — real orders against **Kalshi demo** (`demo-api.kalshi.co`).
+  - `live` — real orders against **Kalshi prod** (real money).
+  Demo/prod creds live in separate env vars (`KALSHI_API_KEY_{DEMO,LIVE}` + matching `_PATH_*`). Resolver fails fast on missing creds and refuses obvious mismatches (e.g. `demo` in PEM filename when mode=live).
+- All trades persisted to SQLite at `data/paper_trades.db` (WAL mode — `core/db.connect()` sets `PRAGMA journal_mode=WAL` on every open). `RiskAgent` owns crypto position state. **Canonical DB is the `kinzie-data` Docker volume on GCE** — the local `data/paper_trades.db` is a stale copy of old `local_sim` fills and should not be used for P&L analysis.
+- Crypto `trades` table has an `environment` column (values: `PAPER`, `LIVE`, `LOCAL_SIM`) so sim rows don't mix with demo/prod rows in P&L.
+- `RiskAgent` has a **breakeven gate**: rejects if `edge < kalshi_fee(P) + ESTIMATED_SLIPPAGE`. Parabolic fee peaks at P=0.5; gate is tighter ATM than at extremes. Recalibrate `ESTIMATED_SLIPPAGE` from demo fills once N≥50.
+- Flip-to-live: see `RUNBOOK.local.md`. Requires `_LIVE` creds set.
 
-## Empirical status (as of 2026-04-24)
+## Monitoring
 
-Paper trading at **BANKROLL_USDC=10,000**. ~80 resolved fills.
+> Always run monitoring on GCE — local DB is stale. SSH prefix in `RUNBOOK.local.md`.
 
-Latest replay_backtest output:
-- Win rate: 95.0%
-- Mean return per fill: +17.3% (normalized: pnl / size_usdc — bankroll-agnostic)
-- Best fill: +113.6% | Worst fill: -106.5%
-- Annualized Sharpe (est.): 14.73 (paper; will compress in live due to queue/market impact)
-- Calibration: 0.90–1.00 bucket at 97.5% model vs 97.8% realized — well-calibrated
+| What | Command (run on GCE via `docker exec kinzie-daemon-1`) |
+|------|--------------------------------------------------------|
+| Multi-strategy P&L | `python3 -m research.multi_pnl_dashboard` |
+| Crypto P&L (Sharpe, age, open table) | `python3 -m research.pnl_dashboard` |
+| Health / last fill / errors | `python3 -m research.health_check` |
+| Replay backtest (crypto) | `python3 -m research.replay_backtest` |
+| Per-trade edge analysis | `python3 -m research.edge_analysis` |
 
-**Live trading gate** (both required):
-```python
-min_fills_for_live: int = 100
-min_sharpe_for_live: float = 1.0
-```
-
-~20 more resolved fills needed at ~4 fills/day.
-
-## Next milestone: 100 fills → live
-
-At 100 fills + Sharpe ≥ 1.0, implement `_live_order()` in `agents/execution_agent.py:85–93` (currently raises `NotImplementedError`). Start at **$10k live capital**, 25% Kelly sizing for first 30 live fills.
+`multi_pnl_dashboard` reads all four strategy tables; only `paper`/`live` crypto rows count toward portfolio total.
 
 ## Production deployment — GCE
 
-The daemon runs 24/7 on a GCP Compute Engine VM (`e2-small`, `us-central1-a`, ~$14/mo).
+e2-small VM, us-central1-a, ~$14/mo. Source `/opt/kinzie/` · Secrets `/opt/kinzie/.env` + `kalshi_private.pem` · DB Docker volume `kinzie-data`.
+Gotcha: `kinzie.service` passes `--project-directory /opt/kinzie` so `.env` loads from repo root, not `deploy/`.
+Docker services: `daemon` (crypto), `econ-daemon`, `sports-daemon`, `weather-daemon`.
+Container names for `docker exec`: `kinzie-daemon-1`, `kinzie-econ-daemon-1`, `kinzie-sports-daemon-1`, `kinzie-weather-daemon-1`.
 
-**VM:** `kinzie-daemon` | IP: `34.134.196.29` | Project: `project-41e99557-708c-4594-ba5`
-
-The daemon runs inside Docker, managed by systemd (`kinzie.service`) with `Restart=always`. It survives crashes and reboots automatically.
-
-**Monitor logs (live tail):**
-```bash
-gcloud compute ssh kinzie-daemon --zone=us-central1-a --project=project-41e99557-708c-4594-ba5 -- sudo journalctl -fu kinzie
-```
-
-**Check service status:**
-```bash
-gcloud compute ssh kinzie-daemon --zone=us-central1-a --project=project-41e99557-708c-4594-ba5 -- sudo systemctl status kinzie
-```
-
-**Run health check on VM:**
-```bash
-gcloud compute ssh kinzie-daemon --zone=us-central1-a --project=project-41e99557-708c-4594-ba5 -- sudo docker exec deploy-daemon-1 python3 -m research.health_check
-```
-
-**Run replay_backtest on VM:**
-```bash
-gcloud compute ssh kinzie-daemon --zone=us-central1-a --project=project-41e99557-708c-4594-ba5 -- sudo docker exec deploy-daemon-1 python3 -m research.replay_backtest
-```
-
-**Restart the daemon:**
-```bash
-gcloud compute ssh kinzie-daemon --zone=us-central1-a --project=project-41e99557-708c-4594-ba5 -- sudo systemctl restart kinzie
-```
-
-**Redeploy after code changes:**
-```bash
-# Upload new source
-gcloud compute scp --recurse --compress --zone=us-central1-a --project=project-41e99557-708c-4594-ba5 /Users/noahdonovan/kinzie/. kinzie-daemon:/opt/kinzie/
-
-# Restart (docker will rebuild the image)
-gcloud compute ssh kinzie-daemon --zone=us-central1-a --project=project-41e99557-708c-4594-ba5 -- sudo systemctl restart kinzie
-```
-
-**Files on VM:**
-- Source: `/opt/kinzie/`
-- Secrets: `/opt/kinzie/.env` and `/opt/kinzie/kalshi_private.pem`
-- SQLite DB: Docker named volume `deploy_kinzie-data` (persists across restarts)
-
-**Gotcha:** `docker-compose.yml` uses `--project-directory /opt/kinzie` in `kinzie.service` so variable substitution for the PEM volume mount picks up `.env` from the repo root, not the `deploy/` subdirectory.
-
-## Running locally
-
-```bash
-pip install -e ".[dev]"
-BANKROLL_USDC=10000 PYTHONPATH=. python3 daemon.py
-pytest tests/
-python3 -m research.health_check
-python3 -m research.replay_backtest
-```
+SSH prefix, redeploy commands, VM IP, and project ID are in **`RUNBOOK.local.md`** (gitignored).
 
 ## Environment variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `KALSHI_API_KEY` | Yes | — | UUID from Kalshi dashboard |
-| `KALSHI_PRIVATE_KEY_PATH` | Yes | — | Path to RSA-2048 PEM file |
-| `BANKROLL_USDC` | No | 100000 | Starting capital — **set to 10000 for paper** |
-| `EXECUTION_MODE` | No | paper | `paper` or `live` |
-| `TRACKED_SYMBOLS` | No | BTC,ETH | Comma-separated symbols |
-
-All `core/config.py` fields overridable via env var (see `Config.from_env()`).
+**Shared:** `EXECUTION_MODE` (`local_sim`/`paper`/`live`); `KALSHI_API_KEY_{DEMO,LIVE}` + `KALSHI_PRIVATE_KEY_PATH_{DEMO,LIVE}`; legacy `KALSHI_API_KEY`/`KALSHI_PRIVATE_KEY_PATH` (research scripts + paper fallback); `BANKROLL_USDC` (default 100000; use 10000 for $10k).
+**Crypto:** `TRACKED_SYMBOLS` (default `BTC,ETH`); `ESTIMATED_SLIPPAGE` (default 0.005 — recalibrate from fills); all other `strategies/crypto/core/config.py` numerics overridable via `Config.from_env()`.
+**Econ:** `BLS_API_KEY` (optional), `FRED_API_KEY` (required for FOMC), `ECON_MIN_EDGE` (0.08), `ECON_TIMEOUT_MINUTES` (5), `ECON_POLL_SECONDS` (3).
+**Sports:** `SPORTS_LEAGUES` (default `NFL,NBA,MLB`; also `NHL`), `SPORTS_MIN_EDGE` (0.08), `SPORTS_POLL_SECONDS` (30).
+**Weather:** `WEATHER_MIN_EDGE` (0.08), `WEATHER_POLL_MINUTES` (15).
 
 ## Kalshi API
 
-- Base URL: `https://api.elections.kalshi.com/trade-api/v2`
-- Auth: RSA-PSS SHA-256. Headers: `KALSHI-ACCESS-KEY`, `KALSHI-ACCESS-SIGNATURE`, `KALSHI-ACCESS-TIMESTAMP`
-- V2 price fields: `yes_ask`/`yes_bid` are integer cents (1–99); `_parse_market()` divides by 100.
-- Rate limit: 429 → exponential backoff (max 5 retries, cap 30s).
-
-## Key design decisions
-
-**Why N(d2) not N(d1)?** Prediction markets pay $1 on resolution — no delta-hedging. N(d2) is the risk-neutral probability that S_T > K.
-
-**Why 0.25× Kelly cap?** Unverified edge at current fill count. Review at N=100 fills.
-
-**Why `BRACKET_CALIBRATION=0.55`?** Log-normal model overestimates narrow bracket probabilities. Provisional — needs 50+ bracket fills to validate.
-
-**Why normalized returns in replay_backtest?** Mixed dataset: first 81 fills at $100k bankroll, remainder at $10k. `pnl / size_usdc` is bankroll-agnostic.
+Base `https://api.elections.kalshi.com/trade-api/v2` · Auth RSA-PSS SHA-256. `yes_ask`/`yes_bid` are integer cents (1–99); `_parse_market()` divides by 100. 429 → exponential backoff (max 5 retries, cap 30s).
