@@ -6,7 +6,6 @@ Usage:
 
 Environment variables:
   EXECUTION_MODE    paper (default) | live
-  BANKROLL_USDC     starting bankroll (default: 100000.0)
 """
 
 from __future__ import annotations
@@ -55,8 +54,8 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 TRACKED_SYMBOLS: list[str] = os.environ.get("TRACKED_SYMBOLS", "BTC,ETH").split(",")
-BANKROLL_USDC = float(os.environ.get("BANKROLL_USDC", "100000.0"))
 ORDER_GROUP_LIMIT = int(os.environ.get("ORDER_GROUP_CONTRACTS_LIMIT", "300"))
+_FALLBACK_BANKROLL = 1000.0  # used only if balance fetch fails at startup
 _SHUTDOWN_TIMEOUT_SECONDS = 10.0
 _PID_PATH = Path(__file__).resolve().parents[2] / "data" / "paper_fund.pid"
 _WATCHDOG_CHECK_SECONDS = 300    # check scanner health every 5 min
@@ -90,11 +89,7 @@ async def _bankroll_refresher(
     private_key_path: str,
     base_url: str,
 ) -> None:
-    """Poll Kalshi for the live account balance every minute and update RiskAgent.
-
-    Falls back silently to the static BANKROLL_USDC if the balance call fails;
-    the RiskAgent is already seeded with that value at construction.
-    """
+    """Poll Kalshi for the live account balance every minute and update RiskAgent."""
     client = KalshiClient(
         api_key=api_key,
         private_key_path=private_key_path,
@@ -139,19 +134,45 @@ async def main() -> None:
     _PID_PATH.parent.mkdir(parents=True, exist_ok=True)
     _PID_PATH.write_text(str(os.getpid()))
 
-    logger.info(
-        "Starting | mode=%s | bankroll=%.2f USDC | min_edge=%.2f | max_positions=%d",
-        env.label,
-        BANKROLL_USDC,
-        config.min_edge,
-        config.max_concurrent_positions,
-    )
-
     # Queues
     tick_queue: asyncio.Queue[Tick] = asyncio.Queue(maxsize=5000)
     signal_queue: asyncio.Queue[Signal] = asyncio.Queue(maxsize=200)
     scanner_out_queue: asyncio.Queue[TradeOpportunity] = asyncio.Queue(maxsize=100)
     approved_queue: asyncio.Queue[tuple[TradeOpportunity, float]] = asyncio.Queue(maxsize=50)
+
+    # Bootstrap: fetch live balance + create order group before constructing agents.
+    # Balance is always pulled from the account — no static config value.
+    order_group_id: str | None = None
+    initial_bankroll = _FALLBACK_BANKROLL
+    try:
+        async with KalshiClient(
+            api_key=env.api_key,
+            private_key_path=env.private_key_path,
+            base_url=env.rest_base_url,
+        ) as bootstrap_client:
+            try:
+                initial_bankroll = await bootstrap_client.get_balance()
+            except Exception as exc:
+                logger.warning("Balance fetch failed at startup: %s — using fallback $%.2f", exc, _FALLBACK_BANKROLL)
+            order_group_id = await bootstrap_client.create_order_group(ORDER_GROUP_LIMIT)
+        if order_group_id:
+            logger.info(
+                "Order group created: id=%s | rolling 15s cap=%d contracts",
+                order_group_id,
+                ORDER_GROUP_LIMIT,
+            )
+        else:
+            logger.warning("Order group creation returned no id — orders will not be group-bound.")
+    except Exception as exc:
+        logger.warning("Order group creation failed: %s — proceeding without group binding.", exc)
+
+    logger.info(
+        "Starting | mode=%s | bankroll=%.2f USDC | min_edge=%.2f | max_positions=%d",
+        env.label,
+        initial_bankroll,
+        config.min_edge,
+        config.max_concurrent_positions,
+    )
 
     # Agents
     crypto_feed = CryptoFeedAgent(tick_queue=tick_queue, symbols=TRACKED_SYMBOLS)
@@ -165,7 +186,7 @@ async def main() -> None:
     scanner = ScannerAgent(
         signal_queue=signal_queue,
         opportunity_queue=scanner_out_queue,
-        bankroll_usdc=BANKROLL_USDC,
+        bankroll_usdc=initial_bankroll,
         price_cache=ws_agent.price_cache,
         crypto_features=feature_agent.latest_features,
         min_edge=config.min_edge,
@@ -173,28 +194,9 @@ async def main() -> None:
     risk = RiskAgent(
         opportunity_queue=scanner_out_queue,
         approved_queue=approved_queue,
-        bankroll_usdc=BANKROLL_USDC,
+        bankroll_usdc=initial_bankroll,
         config=config,
     )
-    # Exchange-side runaway protection: rolling 15s matched-contracts cap.
-    order_group_id: str | None = None
-    try:
-        async with KalshiClient(
-            api_key=env.api_key,
-            private_key_path=env.private_key_path,
-            base_url=env.rest_base_url,
-        ) as bootstrap_client:
-            order_group_id = await bootstrap_client.create_order_group(ORDER_GROUP_LIMIT)
-        if order_group_id:
-            logger.info(
-                "Order group created: id=%s | rolling 15s cap=%d contracts",
-                order_group_id,
-                ORDER_GROUP_LIMIT,
-            )
-        else:
-            logger.warning("Order group creation returned no id — orders will not be group-bound.")
-    except Exception as exc:
-        logger.warning("Order group creation failed: %s — proceeding without group binding.", exc)
 
     execution = ExecutionAgent(
         approved_queue=approved_queue,
