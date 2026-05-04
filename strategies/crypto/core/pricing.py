@@ -57,6 +57,26 @@ def spot_to_implied_prob(
     return _standard_normal_cdf(d2)
 
 
+def up_down_15m_prob(
+    spot: float,
+    t_hours: float,
+    vol: float,
+    drift: float = 0.0,
+) -> float:
+    """
+    Probability that price is HIGHER at expiry than current spot.
+
+    Used for Kalshi Up/Down directional markets (KXETH15M, KXBTC15M).
+    At drift=0 returns ~0.50 for all horizons — edge only comes from drift
+    (momentum signal). Wire drift from FeatureAgent.short_return once N≥50 fills.
+
+    Equivalent to spot_to_implied_prob with strike = spot (ATM).
+    """
+    if spot <= 0 or t_hours <= 0 or vol <= 0:
+        return 0.5
+    return spot_to_implied_prob(spot, spot, t_hours, vol, drift=drift)
+
+
 def bracket_prob(
     current_price: float,
     floor_strike: float,

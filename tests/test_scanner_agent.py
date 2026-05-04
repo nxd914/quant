@@ -18,6 +18,7 @@ from strategies.crypto.agents.scanner_agent import (
     ScannerAgent,
     _is_bracket_market,
     _is_less_market,
+    _is_up_down_15m_market,
     parse_strike,
 )
 from strategies.crypto.core.models import (
@@ -524,3 +525,103 @@ async def test_score_skips_bracket_yes_too_expensive():
     signal = _make_signal("ETH", spot_price=2330.0)
     opp = agent._score(bracket_market, signal)
     assert opp is None  # blocked by bracket YES price cap
+
+
+# ---------------------------------------------------------------------------
+# 15-minute Up/Down market detection and scoring
+# ---------------------------------------------------------------------------
+
+
+def _make_15m_market(
+    ticker: str = "KXETH15M-26MAY030830",
+    implied_prob: float = 0.60,  # market thinks 60% chance of up
+) -> KalshiMarket:
+    from datetime import timedelta
+    close_time = (datetime.now(tz=timezone.utc) + timedelta(minutes=10)).isoformat()
+    return KalshiMarket(
+        ticker=ticker,
+        title="Will ETH be higher in 15 minutes?",
+        event_ticker="KXETH15M-26MAY0308",
+        yes_bid=implied_prob - 0.01,
+        yes_ask=implied_prob + 0.01,
+        no_bid=1 - implied_prob - 0.01,
+        no_ask=1 - implied_prob + 0.01,
+        implied_prob=implied_prob,
+        spread_pct=0.04,
+        volume_24h=3000,
+        liquidity=1000,
+        close_time=close_time,
+        timestamp=datetime.now(tz=timezone.utc),
+        strike_type="",
+        floor_strike=None,
+        cap_strike=None,
+    )
+
+
+def test_is_up_down_15m_market_eth():
+    assert _is_up_down_15m_market(_make_15m_market("KXETH15M-26MAY030830"))
+
+
+def test_is_up_down_15m_market_btc():
+    assert _is_up_down_15m_market(_make_15m_market("KXBTC15M-26MAY030830"))
+
+
+def test_is_up_down_15m_market_false_for_bracket():
+    bracket = _make_market(
+        ticker="KXETH-26APR1417-B2330",
+        strike_type="between",
+        floor_strike=2280.0,
+        cap_strike=2380.0,
+    )
+    assert not _is_up_down_15m_market(bracket)
+
+
+@pytest.mark.asyncio
+async def test_score_15m_market_finds_edge_when_market_far_from_half():
+    """When Kalshi prices a 15M market at 60% (far from 50%), model finds NO edge."""
+    agent = ScannerAgent(
+        asyncio.Queue(),
+        500.0,
+        crypto_features={
+            "ETH": FeatureVector(
+                symbol="ETH",
+                timestamp=datetime.now(tz=timezone.utc),
+                spot_price=3000.0,
+                short_return=0.0,
+                realized_vol=0.6,
+                jump_detected=False,
+                momentum_z=0.0,
+                realized_vol_long=0.6,
+            )
+        },
+    )
+    market = _make_15m_market(implied_prob=0.60)
+    opp = agent._score(market, signal=None)
+    # Model says ~0.50, market says 0.60 → edge ≈ 0.10 → should find NO opportunity
+    assert opp is not None
+    assert opp.side.value == "NO"  # market overprices YES, buy NO
+    assert opp.edge > 0.05
+
+
+@pytest.mark.asyncio
+async def test_score_15m_market_no_edge_at_fair_price():
+    """When 15M market is priced at ~50%, model finds no edge (too small for min_edge)."""
+    agent = ScannerAgent(
+        asyncio.Queue(),
+        500.0,
+        crypto_features={
+            "ETH": FeatureVector(
+                symbol="ETH",
+                timestamp=datetime.now(tz=timezone.utc),
+                spot_price=3000.0,
+                short_return=0.0,
+                realized_vol=0.6,
+                jump_detected=False,
+                momentum_z=0.0,
+                realized_vol_long=0.6,
+            )
+        },
+    )
+    market = _make_15m_market(implied_prob=0.51)
+    opp = agent._score(market, signal=None)
+    assert opp is None  # 1% edge < min_edge threshold

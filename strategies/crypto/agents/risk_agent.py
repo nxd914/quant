@@ -296,10 +296,19 @@ class RiskAgent:
 def _ticker_to_symbol(ticker: str) -> str:
     """Extract crypto symbol from Kalshi ticker prefix (KXBTC -> BTC, KXETH -> ETH)."""
     upper = ticker.upper()
+    # Check 15M series before shorter prefix (KXBTC15M starts with KXBTC)
+    if upper.startswith("KXBTC15M"):
+        return "BTC"
+    if upper.startswith("KXETH15M"):
+        return "ETH"
     if upper.startswith("KXBTC"):
         return "BTC"
     if upper.startswith("KXETH"):
         return "ETH"
+    if upper.startswith("KXSOL"):
+        return "SOL"
+    if upper.startswith("KXXRP"):
+        return "XRP"
     return ticker.split("-")[0]
 
 

@@ -70,9 +70,12 @@ class Config:
     # expiry are correlated: if price lands in either bracket, one must lose. Default
     # of 1 ensures we take only the highest-edge bracket per hour.
 
-    max_signal_age_seconds: float = 2.0
-    # Latency gate. Signals older than 2 seconds are stale — by then the Kalshi
-    # price may have already converged to fair value. Core invariant of the arb.
+    max_signal_age_seconds: float = 30.0
+    # Freshness gate. The scanner has a 5s burst cooldown before evaluating a
+    # signal, so 2s was unreachable. 30s keeps signals current (Kalshi prices
+    # reprice on the order of minutes, not seconds) while discarding truly stale
+    # signals from queue backup. Periodic-scan opportunities use synthetic
+    # signals timestamped at evaluation time and always pass this gate.
 
     min_no_fill_price: float = 0.40
     # NO-side fill floor. At NO=0.39, you risk $0.39 to win $0.61 (1.56:1).

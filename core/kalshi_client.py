@@ -26,6 +26,7 @@ import json
 import logging
 import os
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -295,10 +296,11 @@ class KalshiClient:
         time_in_force: str = "good_till_canceled",
     ) -> dict:
         """
-        Place a limit buy order on Kalshi via V2 fixed-point dollar fields.
+        Place a limit buy order on Kalshi via the V2 event-market order endpoint.
 
-        Legacy integer-cents fields (yes_price/no_price/count) are deprecated;
-        we send count_fp + yes_price_dollars per the V2 schema.
+        V2 uses "bid"/"ask" side semantics (single-book model):
+          - "yes" → "bid"  (buying YES contracts)
+          - "no"  → "ask"  (selling YES = buying NO)
 
         Optional order_group_id ties the order to a rolling matched-contracts
         cap created at daemon startup — exchange-side runaway protection.
@@ -308,25 +310,26 @@ class KalshiClient:
                 "KalshiClient: auth not configured. "
                 "Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH."
             )
-        # Clamp to 0.01-0.99 ($0.01-$0.99) and round to 4dp
+        v2_side = "bid" if side.lower() == "yes" else "ask"
         price = max(0.01, min(0.99, float(yes_price_dollars)))
         payload: dict = {
             "ticker": ticker,
-            "action": "buy",
-            "side": side,
-            "count_fp": f"{int(count)}.00",
-            "yes_price_dollars": f"{price:.4f}",
+            "client_order_id": str(uuid.uuid4()),
+            "side": v2_side,
+            "count": f"{int(count)}.00",
+            "price": f"{price:.4f}",
             "time_in_force": time_in_force,
+            "self_trade_prevention_type": "taker_at_cross",
         }
         if order_group_id:
             payload["order_group_id"] = order_group_id
-        return await self._post("/portfolio/orders", payload)
+        return await self._post("/portfolio/events/orders", payload)
 
     async def cancel_order(self, order_id: str) -> dict:
         """Cancel a resting order by ID."""
         if not self.authenticated:
             raise RuntimeError("KalshiClient: auth required for cancel_order()")
-        return await self._delete(f"/portfolio/orders/{order_id}")
+        return await self._delete(f"/portfolio/events/orders/{order_id}")
 
     async def create_order_group(self, contracts_limit: int) -> Optional[str]:
         """
@@ -444,6 +447,15 @@ class KalshiClient:
                         await asyncio.sleep(delay)
                         attempt += 1
                         continue
+                    if resp.status not in (200, 201):
+                        body = _http_body_preview(await resp.text())
+                        logger.warning(
+                            "Kalshi POST %s → HTTP %s — body: %s",
+                            path,
+                            resp.status,
+                            body or "(empty)",
+                        )
+                        return {}
                     return await resp.json()
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 logger.warning("Kalshi POST %s transport error: %s", path, exc)

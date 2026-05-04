@@ -127,7 +127,8 @@ class ExecutionAgent:
                 error=error_msg,
             )
 
-        filled_count = order_data.get("filled_count", 0)
+        raw_filled = order_data.get("fill_count") or order_data.get("filled_count") or 0
+        filled_count = int(float(raw_filled))
         status = OrderStatus.FILLED if filled_count >= count else OrderStatus.PENDING
         actual_size = filled_count * fill_price if filled_count else size_usdc
 
