@@ -1,4 +1,0 @@
-Contact: mailto:nxd914@gmail.com
-Expires: 2027-04-19T00:00:00.000Z
-Preferred-Languages: en
-Canonical: https://kinzie.com/.well-known/security.txt

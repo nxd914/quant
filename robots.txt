@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /data/
-
-Sitemap: https://kinzie.com/sitemap.xml
