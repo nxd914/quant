@@ -61,7 +61,9 @@ def _make_opp(ticker: str, spread: float = DEFAULT_CONFIG.min_spread_pct + 0.01,
 
 
 def _make_agent() -> RiskAgent:
-    return RiskAgent(asyncio.Queue(), asyncio.Queue(), bankroll_usdc=500.0)
+    agent = RiskAgent(asyncio.Queue(), asyncio.Queue(), bankroll_usdc=500.0)
+    agent.mark_seeded()
+    return agent
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +258,7 @@ async def test_breakeven_gate_rejects_sub_breakeven_edge():
     from strategies.crypto.core.config import Config
     cfg = Config(estimated_slippage=0.005)
     agent = RiskAgent(asyncio.Queue(), asyncio.Queue(), bankroll_usdc=500.0, config=cfg)
+    agent.mark_seeded()
     # At P=0.5: fee = 0.07*0.5*0.5 = 0.0175; breakeven = 0.0175 + 0.005 = 0.0225
     # edge=0.015 < 0.0225 → reject
     opp = _make_opp_at_price("BELOW", price=0.50, edge=0.015)
@@ -268,6 +271,7 @@ async def test_breakeven_gate_approves_sufficient_edge():
     from strategies.crypto.core.config import Config
     cfg = Config(estimated_slippage=0.005)
     agent = RiskAgent(asyncio.Queue(), asyncio.Queue(), bankroll_usdc=500.0, config=cfg)
+    agent.mark_seeded()
     # At P=0.5: breakeven = 0.0225; edge=0.10 passes
     opp = _make_opp_at_price("ABOVE", price=0.50, edge=0.10)
     assert agent._evaluate(opp) is not None
@@ -283,6 +287,7 @@ async def test_breakeven_gate_lower_at_extreme_price():
     from strategies.crypto.core.config import Config
     cfg = Config(estimated_slippage=0.005)
     agent = RiskAgent(asyncio.Queue(), asyncio.Queue(), bankroll_usdc=500.0, config=cfg)
+    agent.mark_seeded()
     # At P=0.1: fee = 0.07*0.1*0.9 = 0.0063; breakeven = 0.0063+0.005 = 0.0113
     # edge=0.02 > 0.0113 → passes breakeven; also clears MIN_KELLY at this price
     opp = _make_opp_at_price("EXTREME", price=0.10, edge=0.02)
@@ -512,3 +517,22 @@ async def test_expiry_concentration_slot_freed_after_resolve():
     agent._last_fill_time = None
     opp2 = _make_opp("KXETH-26MAY0213-B2320")
     assert agent._evaluate(opp2) is not None
+
+
+# ---------------------------------------------------------------------------
+# Startup-seed gate (closes the cross-restart per-expiry duplication race)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_pre_seed_approvals_are_rejected():
+    """Until PortfolioAgent calls mark_seeded(), no opportunity may be approved.
+
+    Closes the cross-restart race where the scanner approved a second bracket
+    on an expiry the bot already held a position on, because the in-memory
+    _positions_by_expiry hadn't been re-seeded from Kalshi yet.
+    """
+    agent = RiskAgent(asyncio.Queue(), asyncio.Queue(), bankroll_usdc=500.0)
+    opp = _make_opp("KXETH-26MAY0213-B2300")
+    assert agent._evaluate(opp) is None
+    agent.mark_seeded()
+    assert agent._evaluate(opp) is not None

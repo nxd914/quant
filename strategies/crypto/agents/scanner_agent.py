@@ -55,13 +55,13 @@ MIN_BRACKET_DISTANCE_PCT = 0.005  # skip brackets where spot is within 0.5% of b
 
 # Trading hours window (UTC). Outside this window, scan interval slows to 10 minutes.
 # Kalshi crypto contracts are most active during US market hours.
-TRADING_START_HOUR_UTC = 8    # 8 AM UTC = 4 AM ET
-TRADING_END_HOUR_UTC = 1      # 1 AM UTC (next day) = 9 PM ET
+TRADING_START_HOUR_UTC = 0    # crypto is 24/7; scan around the clock
+TRADING_END_HOUR_UTC = 24
 IDLE_SCAN_INTERVAL_SECONDS = 600  # 10 minutes between scans outside trading hours
 MIN_LIVE_LIQUIDITY_USD = 2500.0  # live orders are ~$2,500; skip markets too thin to absorb them
 
 # Kalshi series tickers to fetch directly (not discoverable via /events)
-CRYPTO_SERIES = ("KXBTC", "KXETH", "KXBTC15M", "KXETH15M", "KXSOL", "KXXRP")
+CRYPTO_SERIES = ("KXBTC", "KXETH", "KXSOL", "KXXRP")
 
 # Crypto symbol -> Kalshi keyword matching
 # Use full words only — short abbreviations like "btc"/"eth" are substrings of
@@ -430,10 +430,10 @@ class ScannerAgent:
         if not cache:
             return market
 
-        yes_bid = cache.get("yes_bid", market.yes_bid)
-        yes_ask = cache.get("yes_ask", market.yes_ask)
-        no_bid = cache.get("no_bid", market.no_bid)
-        no_ask = cache.get("no_ask", market.no_ask)
+        yes_bid = cache.get("yes_bid") or market.yes_bid
+        yes_ask = cache.get("yes_ask") or market.yes_ask
+        no_bid  = cache.get("no_bid")  or market.no_bid
+        no_ask  = cache.get("no_ask")  or market.no_ask
 
         if yes_bid > 0 and yes_ask > 0:
             implied_prob = (yes_bid + yes_ask) / 2.0

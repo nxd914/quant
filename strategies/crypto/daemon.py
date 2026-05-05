@@ -42,7 +42,7 @@ from .agents import (  # noqa: E402
     CryptoFeedAgent,
     ExecutionAgent,
     FeatureAgent,
-    ResolutionAgent,
+    PortfolioAgent,
     RiskAgent,
     ScannerAgent,
     WebsocketAgent,
@@ -202,10 +202,23 @@ async def main() -> None:
         approved_queue=approved_queue,
         risk_agent=risk,
         environment=env,
+        config=config,
     )
     if order_group_id:
         execution._order_group_id = order_group_id  # type: ignore[attr-defined]
-    resolver = ResolutionAgent(risk_agent=risk)
+
+    portfolio_client = KalshiClient(
+        api_key=env.api_key,
+        private_key_path=env.private_key_path,
+        base_url=env.rest_base_url,
+    )
+    await portfolio_client.open()
+    portfolio = PortfolioAgent(
+        risk_agent=risk,
+        websocket_agent=ws_agent,
+        kalshi_client=portfolio_client,
+        config=config,
+    )
 
     tasks = [
         asyncio.create_task(_guarded(crypto_feed.run(), "crypto_feed"), name="crypto_feed"),
@@ -214,7 +227,7 @@ async def main() -> None:
         asyncio.create_task(_guarded(scanner.run(), "scanner"), name="scanner"),
         asyncio.create_task(_guarded(risk.run(), "risk"), name="risk"),
         asyncio.create_task(_guarded(execution.run(), "execution"), name="execution"),
-        asyncio.create_task(_guarded(resolver.run(), "resolver"), name="resolver"),
+        asyncio.create_task(_guarded(portfolio.run(), "portfolio"), name="portfolio"),
         asyncio.create_task(_watchdog(scanner), name="watchdog"),
     ]
 

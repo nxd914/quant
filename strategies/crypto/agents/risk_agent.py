@@ -47,6 +47,11 @@ class RiskAgent:
         self._open_positions: dict[str, float] = {}   # ticker -> max-loss exposure (USDC)
         self._positions_by_symbol: dict[str, set[str]] = {}  # symbol -> set of tickers
         self._positions_by_expiry: dict[str, set[str]] = {}  # expiry_key -> set of tickers
+        # Approvals are blocked until PortfolioAgent finishes seeding state from
+        # Kalshi. Otherwise on a daemon restart the scanner can approve a new
+        # bracket on an expiry where we already hold a position — duplicating
+        # exposure on adjacent strikes that share settlement risk.
+        self._seeded: bool = False
         self._daily_pnl: float = 0.0
         self._last_reset_date: date = datetime.now(tz=timezone.utc).date()
         self._last_fill_time: Optional[datetime] = None
@@ -65,6 +70,12 @@ class RiskAgent:
             result = self._evaluate(opp)
             if result is not None:
                 await self._approved.put(result)
+
+    def mark_seeded(self) -> None:
+        """Called by PortfolioAgent once startup state-sync against Kalshi is done."""
+        if not self._seeded:
+            self._seeded = True
+            logger.info("RiskAgent: seed complete — approvals enabled")
 
     def restore_position(self, ticker: str, size: float) -> None:
         """Re-register an open position from persistent storage after a process restart."""
@@ -85,6 +96,24 @@ class RiskAgent:
         prev = self._bankroll
         self._bankroll = usdc
         logger.info("RiskAgent: bankroll updated to $%.2f (was $%.2f)", usdc, prev)
+
+    def release_position(self, ticker: str) -> None:
+        """Drop an optimistically-booked slot when the order is rejected.
+
+        RiskAgent reserves slots on approval (so concurrent scanner passes
+        don't double-spend an expiry). If ExecutionAgent's grace window
+        expires unfilled, the slot must be released — otherwise the
+        expiry/symbol stays blocked for the life of the market with zero
+        actual exposure on Kalshi.
+        """
+        self._open_positions.pop(ticker, None)
+        symbol = _ticker_to_symbol(ticker)
+        if symbol in self._positions_by_symbol:
+            self._positions_by_symbol[symbol].discard(ticker)
+            if not self._positions_by_symbol[symbol]:
+                del self._positions_by_symbol[symbol]
+        expiry = _expiry_key(ticker)
+        self._positions_by_expiry.get(expiry, set()).discard(ticker)
 
     def record_fill(self, ticker: str, pnl: float) -> None:
         """Call when a position resolves. Updates daily P&L and removes from open set."""
@@ -125,6 +154,13 @@ class RiskAgent:
     def _evaluate(
         self, opp: TradeOpportunity
     ) -> Optional[tuple[TradeOpportunity, float]]:
+        if not self._seeded:
+            logger.info(
+                "RISK REJECT not_yet_seeded: %s | waiting for PortfolioAgent startup sync",
+                opp.market.ticker,
+            )
+            return None
+
         if self._halted:
             logger.debug("Halted — rejecting opportunity on %s", opp.market.ticker)
             return None
@@ -145,7 +181,11 @@ class RiskAgent:
             logger.debug("Max concurrent positions reached")
             return None
 
-        if opp.market.spread_pct < self._cfg.min_spread_pct:
+        # 15m Up/Down markets: spread_pct is computed on YES side, which appears tight
+        # when the market is skewed (e.g., YES=71%, spread_pct=2.8%), but the NO side
+        # spread is wide. The edge gate is the correct filter for these markets.
+        is_up_down_15m = opp.market.ticker.upper().startswith(("KXBTC15M-", "KXETH15M-"))
+        if not is_up_down_15m and opp.market.yes_bid > 0 and opp.market.spread_pct < self._cfg.min_spread_pct:
             logger.info(
                 "RISK REJECT spread_too_tight: %s | spread=%.2f%% < %.0f%% floor | edge=%.3f",
                 opp.market.ticker, opp.market.spread_pct * 100,

@@ -61,9 +61,8 @@ class WebsocketAgent:
         self.ws_url = ws_url
         self.client: Optional[KalshiWebsocketClient] = None
         self.price_cache: dict[str, PriceSnapshot] = {}
-        # Account-level fill events delivered sub-second; consumers (e.g.
-        # ResolutionAgent reconciliation, future fill-confirm wiring in
-        # ExecutionAgent) can drain this queue.
+        # Account-level fill events delivered sub-second. PortfolioAgent
+        # drains this queue and registers fills with RiskAgent.
         self.fill_events: asyncio.Queue[dict] = asyncio.Queue(maxsize=1000)
         self._is_running = False
 

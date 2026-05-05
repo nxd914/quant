@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(open /Users/noahdonovan/latency/index.html)",
+      "Bash(open /Users/noahdonovan/latency/strategy.html)",
+      "Bash(open /Users/noahdonovan/latency/research.html)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Read(//usr/local/bin/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//Users/noahdonovan/.pyenv/**)",
+      "Bash(/opt/homebrew/bin/python3.13 -m pip install -e \".[dev]\" -q)",
+      "Bash(/opt/homebrew/bin/python3.13 -m pip install -e \".[dev]\" -q --break-system-packages)",
+      "Read(//Users/noahdonovan/**)",
+      "Bash(/opt/homebrew/bin/python3.13 -m pytest kinzie/tests/ -q --tb=short --ignore=kinzie/tests/test_pricing_properties.py --ignore=kinzie/tests/test_kelly_properties.py -x)",
+      "Bash(PYTHONPATH=/Users/noahdonovan /opt/homebrew/bin/python3.13 -m pytest kinzie/tests/ -q --tb=short --ignore=kinzie/tests/test_pricing_properties.py --ignore=kinzie/tests/test_kelly_properties.py)",
+      "Bash(/opt/homebrew/bin/python3.13 *)",
+      "Read(//opt/homebrew/lib/python3.13/site-packages/**)",
+      "Bash(git remote *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(sqlite3 *)",
+      "Bash(xargs grep *)",
+      "Bash(xargs cat *)",
+      "Bash(pkill -f \"python3 daemon.py\")",
+      "Bash(pkill -f \"daemon.py\")",
+      "Bash(TRACKED_SYMBOLS=\"BTC,ETH,SOL,XRP\" MIN_EDGE=0.03 MAX_CONCURRENT_POSITIONS=7 PYTHONPATH=. python3 daemon.py)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(kill 20895)",
+      "Bash(python3 -m research.replay_backtest)",
+      "Bash(python3 *)",
+      "Bash(gcloud compute ssh kinzie-daemon *)",
+      "Bash(gcloud compute *)",
+      "Bash(git restore *)"
+    ]
+  }
+}

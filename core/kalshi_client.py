@@ -282,6 +282,37 @@ class KalshiClient:
         data = await self._get("/portfolio/positions")
         return data.get("market_positions") or []
 
+    async def get_fills(
+        self,
+        ticker: Optional[str] = None,
+        min_ts: Optional[int] = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Return recent fills. Requires auth. min_ts is unix epoch seconds."""
+        if not self.authenticated:
+            raise RuntimeError("KalshiClient: auth required for get_fills()")
+        params: dict = {"limit": limit}
+        if ticker:
+            params["ticker"] = ticker
+        if min_ts is not None:
+            params["min_ts"] = int(min_ts)
+        data = await self._get("/portfolio/fills", params=params)
+        return data.get("fills") or []
+
+    async def get_settlements(
+        self,
+        min_ts: Optional[int] = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Return recent settlements. Requires auth. min_ts is unix epoch seconds."""
+        if not self.authenticated:
+            raise RuntimeError("KalshiClient: auth required for get_settlements()")
+        params: dict = {"limit": limit}
+        if min_ts is not None:
+            params["min_ts"] = int(min_ts)
+        data = await self._get("/portfolio/settlements", params=params)
+        return data.get("settlements") or []
+
     # ------------------------------------------------------------------
     # Order placement (authenticated)
     # ------------------------------------------------------------------
@@ -330,6 +361,13 @@ class KalshiClient:
         if not self.authenticated:
             raise RuntimeError("KalshiClient: auth required for cancel_order()")
         return await self._delete(f"/portfolio/events/orders/{order_id}")
+
+    async def get_order(self, order_id: str) -> dict:
+        """Fetch a single order by id. Returns the unwrapped order dict."""
+        if not self.authenticated:
+            raise RuntimeError("KalshiClient: auth required for get_order()")
+        data = await self._get(f"/portfolio/orders/{order_id}")
+        return data.get("order") or data
 
     async def create_order_group(self, contracts_limit: int) -> Optional[str]:
         """
