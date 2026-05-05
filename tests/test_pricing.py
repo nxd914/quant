@@ -11,7 +11,7 @@ from core.kelly import (
     capped_kelly,
 )
 from strategies.crypto.core.models import FeatureVector
-from strategies.crypto.core.pricing import BRACKET_CALIBRATION, bracket_prob, features_to_signal, spot_to_implied_prob
+from strategies.crypto.core.pricing import BRACKET_CALIBRATION, bracket_prob, features_to_signal, spot_to_implied_prob, up_down_15m_prob
 
 
 def test_spot_to_implied_prob_deep_in_the_money():
@@ -96,6 +96,40 @@ def test_bracket_prob_invalid_inputs():
     assert bracket_prob(75000.0, 75500.0, 74500.0, 1.0, 0.5) == 0.0
     # zero price → 0
     assert bracket_prob(0.0, 74500.0, 75500.0, 1.0, 0.5) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# up_down_15m_prob
+# ---------------------------------------------------------------------------
+
+def test_up_down_15m_prob_near_half_without_drift():
+    """At drift=0, directional probability should be close to 0.5."""
+    prob = up_down_15m_prob(spot=3000.0, t_hours=0.25, vol=0.60)
+    assert 0.45 < prob < 0.55
+
+
+def test_up_down_15m_prob_symmetry():
+    """up_down_15m_prob(spot, spot) is symmetric around 0.50 at drift=0."""
+    prob_up = up_down_15m_prob(spot=3000.0, t_hours=0.25, vol=0.60, drift=0.0)
+    assert abs(prob_up - 0.5) < 0.05
+
+
+def test_up_down_15m_prob_positive_drift_exceeds_half():
+    """Large positive drift should push probability above 0.5."""
+    prob = up_down_15m_prob(spot=3000.0, t_hours=0.25, vol=0.60, drift=5.0)
+    assert prob > 0.5
+
+
+def test_up_down_15m_prob_negative_drift_below_half():
+    """Large negative drift should push probability below 0.5."""
+    prob = up_down_15m_prob(spot=3000.0, t_hours=0.25, vol=0.60, drift=-5.0)
+    assert prob < 0.5
+
+
+def test_up_down_15m_prob_invalid_inputs_return_half():
+    assert up_down_15m_prob(0.0, 0.25, 0.60) == 0.5
+    assert up_down_15m_prob(3000.0, 0.0, 0.60) == 0.5
+    assert up_down_15m_prob(3000.0, 0.25, 0.0) == 0.5
 
 
 def test_features_to_signal_no_signal_when_quiet():

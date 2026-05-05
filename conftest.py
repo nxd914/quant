@@ -1,6 +1,6 @@
 """
 Ensure repo root is on sys.path so tests can import top-level packages
-(core, strategies, tools) without installation.
+(core, strategies) without installation.
 """
 
 from __future__ import annotations

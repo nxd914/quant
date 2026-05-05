@@ -35,7 +35,7 @@ from ..core.models import (
     SignalType,
     TradeOpportunity,
 )
-from ..core.pricing import bracket_prob, spot_to_implied_prob
+from ..core.pricing import bracket_prob, spot_to_implied_prob, up_down_15m_prob
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +55,8 @@ MIN_BRACKET_DISTANCE_PCT = 0.005  # skip brackets where spot is within 0.5% of b
 
 # Trading hours window (UTC). Outside this window, scan interval slows to 10 minutes.
 # Kalshi crypto contracts are most active during US market hours.
-TRADING_START_HOUR_UTC = 8    # 8 AM UTC = 4 AM ET
-TRADING_END_HOUR_UTC = 1      # 1 AM UTC (next day) = 9 PM ET
+TRADING_START_HOUR_UTC = 0    # crypto is 24/7; scan around the clock
+TRADING_END_HOUR_UTC = 24
 IDLE_SCAN_INTERVAL_SECONDS = 600  # 10 minutes between scans outside trading hours
 MIN_LIVE_LIQUIDITY_USD = 2500.0  # live orders are ~$2,500; skip markets too thin to absorb them
 
@@ -72,6 +72,9 @@ CRYPTO_KEYWORDS: dict[str, tuple[str, ...]] = {
     "SOL": ("solana", "kxsol"),
     "XRP": ("ripple", "kxxrp"),
 }
+
+# Regex for 15-min Up/Down market detection (no strike suffix — directional)
+_TICKER_15M_RE = re.compile(r"^KX(BTC|ETH)15M-", re.IGNORECASE)
 
 # Regex patterns for strike extraction from ticker
 # -T = threshold "above" (YES = spot > strike) or "below" (YES = spot < strike)
@@ -302,16 +305,19 @@ class ScannerAgent:
         Emits TradeOpportunity if edge exceeds MIN_EDGE threshold.
         """
         is_bracket = _is_bracket_market(market)
+        is_up_down = _is_up_down_15m_market(market)
 
         if not _has_enough_time(market.close_time):
             logger.debug("SCORE skip time: %s | close=%s", market.ticker, market.close_time)
             return None
 
         hours_to_close = _hours_until(market.close_time)
-        if hours_to_close > MAX_HOURS_TO_CLOSE:
+        # 15M markets have a much shorter max horizon than bracket/threshold
+        max_hours = 0.5 if is_up_down else MAX_HOURS_TO_CLOSE
+        if hours_to_close > max_hours:
             logger.debug(
-                "SCORE skip too_far_out: %s | hours=%.1f > %d",
-                market.ticker, hours_to_close, MAX_HOURS_TO_CLOSE,
+                "SCORE skip too_far_out: %s | hours=%.2f > %.1f",
+                market.ticker, hours_to_close, max_hours,
             )
             return None
 
@@ -335,7 +341,12 @@ class ScannerAgent:
             return None
         vol = max(realized_vol, MIN_CRYPTO_VOL)
 
-        if is_bracket:
+        if is_up_down:
+            # 15-min directional: YES = price higher at expiry than current spot.
+            # Model is ~0.50 without drift; edge comes from Kalshi market drifting from 50%.
+            model_prob = up_down_15m_prob(spot_price, hours_to_expiry, vol)
+            strike_repr = f"atm@{spot_price:.0f}"
+        elif is_bracket:
             # Bracket: YES resolves if floor < spot < cap at expiry
             floor = market.floor_strike
             cap   = market.cap_strike
@@ -419,10 +430,10 @@ class ScannerAgent:
         if not cache:
             return market
 
-        yes_bid = cache.get("yes_bid", market.yes_bid)
-        yes_ask = cache.get("yes_ask", market.yes_ask)
-        no_bid = cache.get("no_bid", market.no_bid)
-        no_ask = cache.get("no_ask", market.no_ask)
+        yes_bid = cache.get("yes_bid") or market.yes_bid
+        yes_ask = cache.get("yes_ask") or market.yes_ask
+        no_bid  = cache.get("no_bid")  or market.no_bid
+        no_ask  = cache.get("no_ask")  or market.no_ask
 
         if yes_bid > 0 and yes_ask > 0:
             implied_prob = (yes_bid + yes_ask) / 2.0
@@ -512,6 +523,11 @@ def parse_strike(market: KalshiMarket) -> Optional[float]:
         return float(title_match.group(1).replace(",", ""))
 
     return None
+
+
+def _is_up_down_15m_market(market: KalshiMarket) -> bool:
+    """Return True if this is a 15-minute Up/Down directional market (KXETH15M/KXBTC15M)."""
+    return bool(_TICKER_15M_RE.match(market.ticker))
 
 
 def _is_bracket_market(market: KalshiMarket) -> bool:

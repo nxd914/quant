@@ -70,9 +70,12 @@ class Config:
     # expiry are correlated: if price lands in either bracket, one must lose. Default
     # of 1 ensures we take only the highest-edge bracket per hour.
 
-    max_signal_age_seconds: float = 2.0
-    # Latency gate. Signals older than 2 seconds are stale — by then the Kalshi
-    # price may have already converged to fair value. Core invariant of the arb.
+    max_signal_age_seconds: float = 30.0
+    # Freshness gate. The scanner has a 5s burst cooldown before evaluating a
+    # signal, so 2s was unreachable. 30s keeps signals current (Kalshi prices
+    # reprice on the order of minutes, not seconds) while discarding truly stale
+    # signals from queue backup. Periodic-scan opportunities use synthetic
+    # signals timestamped at evaluation time and always pass this gate.
 
     min_no_fill_price: float = 0.40
     # NO-side fill floor. At NO=0.39, you risk $0.39 to win $0.61 (1.56:1).
@@ -129,10 +132,12 @@ class Config:
     # Skip brackets where spot is within 0.5% of the bracket midpoint.
     # ATM brackets have non-linear sensitivity that the log-normal model mishandles.
 
-    trading_start_hour_utc: int = 8
-    trading_end_hour_utc: int = 1
-    # Active trading window (UTC). 08:00–01:00 UTC = 04:00–21:00 ET.
-    # Kalshi crypto markets are most liquid during US equity session.
+    trading_start_hour_utc: int = 0
+    trading_end_hour_utc: int = 24
+    # Active trading window (UTC). Crypto markets trade 24/7 and Kalshi
+    # publishes 15-minute Up/Down + hourly bracket contracts continuously,
+    # so we scan around the clock. (Held over from a multi-strategy era when
+    # the bot was idle outside US equity hours.)
 
     idle_scan_interval_seconds: int = 600
     # Scan cadence outside trading hours (10 min). Keeps the market cache warm
@@ -183,6 +188,32 @@ class Config:
     # data once fill cadence stabilizes — the Sharpe estimate is sensitive to
     # this assumption at low sample counts.
 
+    # ── Execution ───────────────────────────────────────────────────────────
+    execution_fill_grace_seconds: float = 30.0
+    # Kalshi V2 limit orders fill asynchronously. After POST we poll
+    # get_order(order_id) up to this many seconds; cancel if still unfilled.
+    # Required: a synchronous fill_count==0 check would cancel every order
+    # before it has a chance to match. 30s gives thin demo books a chance
+    # for crossing flow to land — 8s was too short on Up/Down 15m markets.
+
+    execution_fill_poll_interval_seconds: float = 1.0
+
+    execution_cross_offset_max: float = 0.10
+    execution_cross_offset_min: float = 0.01
+    # Cross-the-spread bounds applied in ExecutionAgent. The limit price is
+    # base_ask + clamp(edge*0.5, min, max). Raising max from 5¢→10¢ unblocks
+    # thin 15m Up/Down books where 5¢ above the cached ask still didn't cross.
+
+    min_fill_register_usd: float = 1.0
+    # Minimum WS-fill cost (USD) to register as a real position with RiskAgent.
+    # Sub-dollar partial fills routinely never settle as a real Kalshi position
+    # (Kalshi's matching engine occasionally reports 1-2¢ partial-fills that
+    # are immediately reversed). Registering them locks the per-expiry slot for
+    # up to one reconcile cycle, blocking dozens of real trade attempts.
+    # PortfolioAgent's reconcile loop still picks up real positions from
+    # get_positions() within ~60s, so the worst-case effect of this filter is
+    # a brief delay in registering a genuine micro-fill.
+
     # ── Live mode gate ──────────────────────────────────────────────────────
     min_fills_for_live: int = 100
     # Minimum resolved paper fills before live mode is permitted.
@@ -230,6 +261,22 @@ class Config:
             assumed_fills_per_day=_int("ASSUMED_FILLS_PER_DAY", base.assumed_fills_per_day),
             min_fills_for_live=_int("MIN_FILLS_FOR_LIVE", base.min_fills_for_live),
             min_sharpe_for_live=_float("MIN_SHARPE_FOR_LIVE", base.min_sharpe_for_live),
+            execution_fill_grace_seconds=_float(
+                "EXECUTION_FILL_GRACE_SECONDS", base.execution_fill_grace_seconds,
+            ),
+            execution_fill_poll_interval_seconds=_float(
+                "EXECUTION_FILL_POLL_INTERVAL_SECONDS",
+                base.execution_fill_poll_interval_seconds,
+            ),
+            execution_cross_offset_max=_float(
+                "EXECUTION_CROSS_OFFSET_MAX", base.execution_cross_offset_max,
+            ),
+            execution_cross_offset_min=_float(
+                "EXECUTION_CROSS_OFFSET_MIN", base.execution_cross_offset_min,
+            ),
+            min_fill_register_usd=_float(
+                "MIN_FILL_REGISTER_USD", base.min_fill_register_usd,
+            ),
         )
 
     def validate(self) -> None:
