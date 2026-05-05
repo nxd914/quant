@@ -5,47 +5,50 @@
 
 # Kinzie
 
-Async prediction market trading system built in Python 3.11+. Deterministic execution pipeline — no ML, no heuristics. Every decision is a closed-form function of market price and realized volatility, sized by Kelly criterion, gated behind hard risk controls.
+Async prediction market trading daemon for Kalshi crypto markets. Deterministic execution pipeline — no ML, no heuristics. Every decision is a closed-form function of market price and realized volatility (Black-Scholes N(d2)), sized by fee-adjusted quarter-Kelly, gated behind hard risk controls.
 
-## Architecture
+## Pipeline
 
 ```
 CryptoFeedAgent ──► FeatureAgent ──► ScannerAgent ──► RiskAgent ──► ExecutionAgent ──► ResolutionAgent
-                                          ▲
-                                    WebsocketAgent
-                                   (real-time price cache)
+                                           ▲
+                                     WebsocketAgent
+                                    (real-time price cache)
 ```
 
-Seven concurrent async agents coordinated through typed `asyncio.Queue` instances and a read-only WebSocket price cache. No shared mutable state between agents.
+Seven async agents coordinated through `asyncio.Queue` instances. No shared mutable state between agents.
 
 ## Stack
 
 - **Runtime**: Python 3.11+, `asyncio`, frozen dataclasses throughout
-- **Persistence**: SQLite audit trail — every fill records market state at signal time
-- **Testing**: pytest + [Hypothesis](https://hypothesis.readthedocs.io/) property-based tests; AAA pattern; 80%+ coverage enforced in CI
+- **Persistence**: SQLite (WAL mode) — every fill records market state at signal time
+- **Testing**: pytest + [Hypothesis](https://hypothesis.readthedocs.io/) property-based tests
 - **Quality**: ruff (lint + format), mypy (strict), GitHub Actions on every push and PR across Python 3.11/3.12
-- **Deployment**: Docker + Railway; structured JSON logging via `LOG_FORMAT=json`
+- **Deployment**: Docker + GCE (e2-small, us-central1-a); structured JSON logging via `LOG_FORMAT=json`
 
 ## Repository
 
 ```
-core/       Pricing and risk models — pure math, no I/O, no side effects
-agents/     Async execution layer — seven concurrent agents
-tests/      Pytest suite + Hypothesis property tests
-research/   Replay backtester, health checks, P&L analysis
-benchmarks/ Hot-path profiling
-docs/       Strategy derivations, risk model, ops runbook
-deploy/     Docker / Railway config
+strategies/crypto/          Daemon entry point and all trading agents
+  daemon.py                 Entry point: python3 -m strategies.crypto.daemon
+  agents/                   Seven async agents
+  core/                     Config, features, logging, models, pricing
+
+core/                       Shared utilities (db, kelly, kalshi_client, alert, environment)
+research/                   Monitoring scripts: live_roi, pnl_dashboard, health_check, edge_analysis
+scripts/                    Operational one-offs (sync_demo_fills, force_resolve, run.sh)
+deploy/                     Dockerfile, docker-compose.yml, kinzie.service, gce_setup.sh
+tests/                      Pytest suite + Hypothesis property tests
 ```
 
 ## Quick start
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/
+pytest tests/ -q --tb=short
 ```
 
-Requires credentials set in a `.env` at the repo root (see `CLAUDE.md`). Paper mode is the default — live trading is gated behind empirical performance thresholds enforced in `core/config.py`.
+Requires credentials in a `.env` at the repo root. See `CLAUDE.md` for all environment variables and the full ops runbook.
 
 ## License
 
