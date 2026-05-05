@@ -1,144 +1,170 @@
-## ⚠ Session orientation — read before doing anything
+## ⚠ Read this first — every session
 
-- **Crypto-only.** Every other strategy (econ/sports/weather) was deleted on 2026-05-03 in
-  the hard pivot. The only daemon, the only edge source, the only thing in this repo is
-  the Kalshi crypto latency-arb bot.
-- **GCE is canonical.** The local `data/paper_trades.db` is a synced snapshot of demo fills
-  (see `scripts/sync_demo_fills.py`). Live state lives in the GCE `kinzie-data` Docker volume.
-  Run monitoring on GCE: `<SSH prefix> sudo docker exec kinzie-daemon-1 python3 -m research.live_roi`
-  SSH prefix and VM details live in `RUNBOOK.local.md` (gitignored).
-- **`EXECUTION_MODE=paper`** means real orders against `demo-api.kalshi.co` (Kalshi demo).
-  `EXECUTION_MODE=live` means real orders against prod (real money). `local_sim` is gone.
-- **`environment` column** in the `trades` table stores uppercase: `PAPER`, `LIVE`.
-  Filtering code must use case-insensitive comparison (`lower(environment) IN ('paper','live')`).
-- **`core/db.py`** is the required SQLite WAL helper. It must be present in the Docker
-  image. `ModuleNotFoundError: No module named 'core.db'` → image is stale; rebuild and redeploy.
-- **PEM path pitfall.** Local `.env` uses host paths (`/Users/.../kalshi_demo.pem`); the
-  GCE `.env` must use the **container path** for the resolver
-  (`KALSHI_PRIVATE_KEY_PATH_DEMO=/app/kalshi_private.pem`) while the legacy
-  `KALSHI_PRIVATE_KEY_PATH=/opt/kinzie/kalshi_demo.pem` stays as the host path so
-  docker-compose can bind-mount it. Don't blindly `scp .env` from local to GCE — sed
-  the DEMO/LIVE paths to `/app/...` after copying.
-- **Redeploy doesn't delete.** `gcloud compute scp --recurse` copies/overwrites but
-  never deletes. After deleting modules locally, `sudo rm -rf` the same paths on the
-  VM before `systemctl restart kinzie`, or stale code will keep importing.
+**This repo is a single thing:** a Kalshi crypto latency-arb daemon. Nothing else lives here.
 
-## What this is
+### Fill count is small — do not hallucinate P&L
+- **N=4 real demo fills** as of 2026-05-03 (3W/1L, -$35.50 net on $336 risked).
+- **Do not invent fills, trades, or P&L numbers.** Always query the DB or run a monitoring
+  command to get real numbers. Any P&L or trade count you state must come from actual data.
+- Local `data/paper_trades.db` is a **synced snapshot** — canonical data lives on GCE.
+  Run monitoring on GCE (see below), not locally.
 
-Single-strategy quant bot targeting **Kalshi crypto binary markets** (BTC, ETH; symbols
-extendable via `TRACKED_SYMBOLS`). Closed-form Black-Scholes pricing vs Welford realized
-vol drives a fee-adjusted Kelly sizing decision. Currently in **demo-book testing** —
-N=4 real fills as of 2026-05-03 (3W/1L, -$35.50 net on $336 risked). No published
-baseline yet; re-baselining from demo fills.
+### Execution modes
+- `EXECUTION_MODE=paper` → real orders against `demo-api.kalshi.co` (Kalshi demo account).
+- `EXECUTION_MODE=live` → real orders against prod (real money). Not yet enabled.
+- `local_sim` does not exist. There is no simulation mode.
+
+### DB column values
+- `trades.environment`: `PAPER` or `LIVE` (uppercase). Always filter case-insensitively:
+  `lower(environment) IN ('paper', 'live')`.
+
+---
+
+## Repo map — what each folder does
+
+```
+strategies/crypto/          The daemon and all trading agents
+  daemon.py                 Entry point. Run with: python3 -m strategies.crypto.daemon
+  agents/                   Six async agents (see Pipeline below)
+  core/                     config.py, features.py, logging.py, models.py, pricing.py
+
+core/                       Shared utilities used by both agents and research scripts
+  db.py                     SQLite WAL helper — MUST be in Docker image
+  environment.py            Resolves EXECUTION_MODE once at startup
+  kalshi_client.py          Kalshi REST + WebSocket client
+  kelly.py                  Fee-adjusted Kelly sizing
+  models.py                 Shared dataclasses (Tick, Market, etc.)
+  alert.py                  Slack/logging alerts
+
+research/                   Monitoring scripts — always run on GCE, not locally
+  live_roi.py               Headline P&L, win rate, open positions
+  pnl_dashboard.py          Sharpe, full trade table
+  health_check.py           Daemon health + last fill
+  edge_analysis.py          Per-trade edge breakdown
+  replay_backtest.py        Replay resolved trades
+
+scripts/                    Operational one-offs
+  sync_demo_fills.py        Pull GCE DB snapshot to local
+  check_env.py              Validate .env vars
+  force_resolve.py          Manually resolve stuck positions
+  run.sh                    Start/stop/restart daemon with PID management
+
+deploy/                     Docker + GCE
+  Dockerfile
+  docker-compose.yml
+  kinzie.service            systemd unit
+  gce_setup.sh
+
+tests/                      pytest suite — run with: pytest tests/
+```
+
+---
 
 ## Pipeline
 
-`CryptoFeedAgent → FeatureAgent → ScannerAgent → RiskAgent → ExecutionAgent → ResolutionAgent`
-(plus `WebsocketAgent` feeding ticker prices into FeatureAgent and account-level fill
-events into a queue for sub-second confirms).
+```
+CryptoFeedAgent → FeatureAgent → ScannerAgent → RiskAgent → ExecutionAgent → ResolutionAgent
+```
 
-Entry point: `strategies/crypto/daemon.py`. Docker service: `daemon`. Container:
-`kinzie-daemon-1`.
+Plus `WebsocketAgent` (feeds ticker prices into FeatureAgent; exposes `fill_events` queue).
 
-## Edge source
+All agents live in `strategies/crypto/agents/`. All are async; coordinated by `daemon.py`.
 
-- `strategies/crypto/core/pricing.py` — `spot_to_implied_prob()` is Black-Scholes N(d2)
-  with an **optional** `drift=0.0` parameter (default no-op; passes momentum-EWMA when
-  N≥50 fills justify it). `bracket_prob()` is N(d2_floor) − N(d2_cap) × `BRACKET_CALIBRATION`
-  (currently 0.55).
-- `core/kelly.py` — fee-adjusted quarter-Kelly sizing. The `KALSHI_TAKER_FEE_RATE`
-  parabolic fee (`0.07 × P × (1−P)` per contract) peaks at P=0.5 and is folded into
-  the breakeven gate.
-- `RiskAgent` rejects opportunities where `edge < kalshi_fee(P) + ESTIMATED_SLIPPAGE`.
-  `ESTIMATED_SLIPPAGE` defaults to 0.005; **recalibrate from demo fills once N≥50**.
-- Per-expiry position cap (1) prevents correlated same-hour bets — added 2026-04 after
-  loss concentration analysis.
+---
 
-The math knobs are no longer "frozen" — they were unfrozen during the crypto pivot
-and may be tuned as fill data accumulates. Tests in `tests/test_pricing.py` and
-`tests/test_pricing_properties.py` lock in invariants (drift=0 backward-compat,
-monotonicity, valid-probability ranges).
+## Edge source (the math)
 
-## Core invariants
+- **Pricing** (`strategies/crypto/core/pricing.py`):
+  - `spot_to_implied_prob()` — Black-Scholes N(d2), no risk-free rate.
+  - `bracket_prob()` — `(N(d2_floor) - N(d2_cap)) × BRACKET_CALIBRATION` (calibration = 0.55).
+- **Sizing** (`core/kelly.py`):
+  - Fee-adjusted quarter-Kelly. Taker fee: `0.07 × P × (1−P)` per contract.
+  - `MAX_KELLY_FRACTION = 0.25`, `MIN_EDGE = 0.04`.
+- **Risk gate** (`strategies/crypto/agents/risk_agent.py`):
+  - Rejects if `edge < kalshi_fee(P) + ESTIMATED_SLIPPAGE` (default slippage = 0.005).
+  - Per-expiry cap of 1 position to prevent correlated same-hour bets.
+- All tunable constants are in `strategies/crypto/core/config.py` (`Config` dataclass).
+  Override any via environment variable — see `Config.from_env()`.
 
-- All trades persisted to SQLite at `data/paper_trades.db` (WAL mode via `core/db.connect()`).
-  Canonical DB lives in the `kinzie-data` Docker volume on GCE; local DB is a synced snapshot.
-- `trades.environment` column values: `PAPER`, `LIVE`. Filter case-insensitively.
-- `EXECUTION_MODE` resolved exactly once at daemon startup via `core/environment.py`. Every
-  agent receives the resolved `Environment` — they never read env vars directly.
-  Demo and prod creds in separate env vars (`KALSHI_API_KEY_{DEMO,LIVE}` +
-  matching `_PATH_*`). The resolver fails fast on missing creds and refuses obvious
-  mismatches (e.g. `demo` in PEM filename when mode=live).
-- **Order Groups safety net**: at startup, daemon creates an order group with a
-  rolling 15-second matched-contracts cap (`ORDER_GROUP_CONTRACTS_LIMIT`, default 300).
-  Every order placed via `ExecutionAgent` carries the group_id; if a pricing bug fires
-  runaway orders, the exchange auto-cancels every order in the group. Free safety.
-- **V2 order endpoint**: `core/kalshi_client.py::place_limit_order()` POSTs
-  `count_fp` + `yes_price_dollars` (string decimal) per the V2 schema. Legacy integer
-  cents fields are deprecated and removed from response payloads as of 2026-03-12.
-- **WS user_fills subscription**: `WebsocketAgent` subscribes to `["ticker", "fill"]`
-  and exposes `fill_events: asyncio.Queue` for sub-second account-level fill confirms.
-  ExecutionAgent's place→fill confirmation can be wired through this queue when needed
-  (currently uses synchronous POST response).
-- Flip-to-live: see `RUNBOOK.local.md`. Requires `_LIVE` creds set.
+---
 
-## Monitoring
+## Core invariants — never violate these
 
-> Always run on GCE — local DB is a snapshot. SSH prefix in `RUNBOOK.local.md`.
+1. **`core/db.py` must exist in the Docker image.** Missing it → `ModuleNotFoundError`.
+2. **`EXECUTION_MODE` is resolved once** at startup via `core/environment.py`. Agents never
+   read env vars directly.
+3. **Order Groups safety net**: daemon creates an order group at startup with a 15-second
+   rolling contracts cap (`ORDER_GROUP_CONTRACTS_LIMIT`, default 300). All orders carry this
+   group_id. Exchange auto-cancels runaway orders.
+4. **V2 order endpoint**: `place_limit_order()` uses `count_fp` + `yes_price_dollars`
+   (string decimal). Legacy integer cents fields are gone.
+5. **PEM path pitfall**: local `.env` has host paths; GCE `.env` must use container paths
+   (`KALSHI_PRIVATE_KEY_PATH_DEMO=/app/kalshi_private.pem`). Don't blindly scp local .env
+   to GCE — sed the paths.
+6. **Redeploy doesn't delete.** After removing files locally, `sudo rm -rf` them on the VM
+   before restarting, or stale modules will keep importing.
 
-| What | Command (on GCE via `docker exec kinzie-daemon-1`) |
-|------|----------------------------------------------------|
-| **Headline ROI** (win rate, gross+today P&L, latency, open table) | `python3 -m research.live_roi` |
-| Crypto P&L (Sharpe, age, full open table) | `python3 -m research.pnl_dashboard` |
-| Health / last fill / errors | `python3 -m research.health_check` |
-| Replay backtest | `python3 -m research.replay_backtest` |
-| Per-trade edge analysis | `python3 -m research.edge_analysis` |
+---
 
-## Production deployment — GCE
+## Monitoring (run on GCE — local DB is a snapshot)
 
-e2-small VM, us-central1-a, ~$14/mo. Source `/opt/kinzie/` · Secrets `/opt/kinzie/.env`
-+ `kalshi_private.pem` · DB volume `kinzie-data`.
+SSH prefix and VM IP are in `RUNBOOK.local.md` (gitignored).
 
-Single Docker service: `daemon`. Container: `kinzie-daemon-1`.
+```bash
+# Inside: sudo docker exec kinzie-daemon-1 <command>
+python3 -m research.live_roi          # headline P&L, win rate, open positions
+python3 -m research.pnl_dashboard     # Sharpe, full trade table
+python3 -m research.health_check      # daemon health + last fill + errors
+python3 -m research.edge_analysis     # per-trade edge breakdown
+python3 -m research.replay_backtest   # replay resolved trades
+```
 
-Gotcha: `kinzie.service` passes `--project-directory /opt/kinzie` so `.env` loads from
-repo root, not `deploy/`.
-
-SSH prefix, redeploy commands, VM IP, and project ID are in **`RUNBOOK.local.md`**
-(gitignored).
+---
 
 ## Environment variables
 
-- `EXECUTION_MODE` — `paper` (default, Kalshi demo) | `live` (Kalshi prod).
-- `KALSHI_API_KEY_DEMO` + `KALSHI_PRIVATE_KEY_PATH_DEMO` — demo creds.
-- `KALSHI_API_KEY_LIVE` + `KALSHI_PRIVATE_KEY_PATH_LIVE` — prod creds.
-- Legacy `KALSHI_API_KEY` / `KALSHI_PRIVATE_KEY_PATH` — research-script fallback only.
-- `BANKROLL_USDC` — sizing basis (default 100000; use 1064 to match real demo balance).
-- `TRACKED_SYMBOLS` — default `BTC,ETH`. Add `SOL,XRP,DOGE,BNB,HYPE` once symbol-feed
-  configs exist.
-- `ESTIMATED_SLIPPAGE` — breakeven-gate slippage (default 0.005). Recalibrate from
-  fills once N≥50.
-- `ORDER_GROUP_CONTRACTS_LIMIT` — rolling 15s contracts cap (default 300).
-- All other `strategies/crypto/core/config.py` numerics overridable via `Config.from_env()`.
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `EXECUTION_MODE` | `paper` | `paper` = Kalshi demo, `live` = real money |
+| `KALSHI_API_KEY_DEMO` | — | Demo API key |
+| `KALSHI_PRIVATE_KEY_PATH_DEMO` | — | Demo PEM (container path on GCE) |
+| `KALSHI_API_KEY_LIVE` | — | Prod API key (not yet used) |
+| `KALSHI_PRIVATE_KEY_PATH_LIVE` | — | Prod PEM |
+| `BANKROLL_USDC` | 100000 | Sizing basis (use 1064 to match real demo balance) |
+| `TRACKED_SYMBOLS` | `BTC,ETH` | Symbols to trade |
+| `ESTIMATED_SLIPPAGE` | 0.005 | Breakeven-gate slippage; recalibrate at N≥50 fills |
+| `ORDER_GROUP_CONTRACTS_LIMIT` | 300 | Rolling 15s cap for runaway-order protection |
+
+All `Config` numerics (min_edge, kelly_fraction_cap, etc.) are also overridable as env vars.
+See `strategies/crypto/core/config.py` for the full list.
+
+---
 
 ## Kalshi API
 
-- Base: `https://api.elections.kalshi.com/trade-api/v2` (prod) / `https://demo-api.kalshi.co/trade-api/v2` (demo).
-- Auth: RSA-PSS SHA-256 signed headers per request.
-- Order placement: POST `/portfolio/orders` with `count_fp` + `yes_price_dollars`.
-- Order groups: POST `/portfolio/order_groups/create` returns `order_group_id`.
-- WebSocket: `wss://demo-api.kalshi.co/trade-api/ws/v2` — subscribe to `ticker` for
-  prices and `fill` for account-level fill events.
-- `_parse_market()` divides legacy cents fields by 100; modern `*_dollars` fields used as-is.
-- 429 → exponential backoff (max 5 retries, cap 30s).
+- Prod base: `https://api.elections.kalshi.com/trade-api/v2`
+- Demo base: `https://demo-api.kalshi.co/trade-api/v2`
+- Auth: RSA-PSS SHA-256 signed headers on every request.
+- Order: POST `/portfolio/orders` with `count_fp` + `yes_price_dollars`.
+- Order groups: POST `/portfolio/order_groups/create` → `order_group_id`.
+- WebSocket: `wss://demo-api.kalshi.co/trade-api/ws/v2` — channels: `ticker`, `fill`.
+- 429 → exponential backoff (max 5 retries, 30s cap).
 
-## Future ROI levers (not yet implemented)
+---
 
-- Expand `TRACKED_SYMBOLS` to SOL/XRP/DOGE/BNB/HYPE (wiring exists; needs symbol-specific
-  feed configs).
-- 15-Minute Up/Down market support (different market type, different pricing horizon).
-- Batch `Create Orders V2` — single round-trip for multi-strike opportunities.
-- Wire `pricing.py` `drift` parameter from `FeatureAgent.short_return` / momentum-EWMA
-  once N≥50 demo fills justify the bias.
-- Replace synchronous order-confirm with `WebsocketAgent.fill_events` consumer in
-  `ExecutionAgent` for sub-second fill verification.
+## GCE deployment
+
+e2-small, us-central1-a (~$14/mo). Source: `/opt/kinzie/`. Secrets: `/opt/kinzie/.env` +
+`kalshi_private.pem`. DB: `kinzie-data` Docker volume. Container: `kinzie-daemon-1`.
+
+`kinzie.service` uses `--project-directory /opt/kinzie`, so `.env` loads from repo root.
+
+---
+
+## What does NOT exist here
+
+- No simulation mode, no `local_sim`.
+- No `tools/` CLI (`quant scan`, `quant paper`, etc.) — deleted in crypto pivot.
+- No `docs/` folder — all docs were stale; source of truth is the code itself.
+- No website files — those were for a different project phase, also deleted.
+- No multi-strategy framework. One strategy, one daemon.
