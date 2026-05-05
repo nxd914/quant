@@ -1,0 +1,17 @@
+# Files Claude should not read — keeps AI context scoped to strategy logic only.
+# Format is identical to .gitignore.
+
+# Deployment / infrastructure — not trading logic
+deploy/
+.github/
+
+# License boilerplate
+LICENSE
+
+# Package / build config — no strategy logic here
+pyproject.toml
+requirements.txt
+
+# Root-level boilerplate
+__init__.py
+conftest.py
